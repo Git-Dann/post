@@ -67,7 +67,7 @@ public struct EditorView: View {
         }
         .animation(Theme.Motion.settle, value: model.isCropping)
         .animation(Theme.Motion.settle, value: showStyles)
-        .animation(Theme.Motion.settle, value: showInfo)
+        .animation(Theme.Motion.glass, value: showInfo)
         .statusBarHidden()
         .sheet(item: $shareItem) { item in ActivityView(items: [item.url]) }
         .task {
@@ -153,7 +153,7 @@ public struct EditorView: View {
                         .glassEffectID("info", in: infoGlass)
                 } else {
                     Button {
-                        withAnimation(Theme.Motion.settle) { showInfo = true }
+                        withAnimation(Theme.Motion.glass) { showInfo = true }
                     } label: {
                         Color.clear
                             .frame(width: 38, height: 38)
@@ -176,7 +176,7 @@ public struct EditorView: View {
         return VStack(alignment: .leading, spacing: Theme.Space.s) {
             HStack {
                 Button {
-                    withAnimation(Theme.Motion.settle) { showInfo = false }
+                    withAnimation(Theme.Motion.glass) { showInfo = false }
                 } label: {
                     Color.clear
                         .frame(width: 30, height: 30)
