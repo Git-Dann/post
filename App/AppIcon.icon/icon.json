@@ -1,0 +1,88 @@
+{
+  "features" : [
+    "refractivity",
+    "specular-location"
+  ],
+  "fill" : {
+    "automatic-gradient" : "srgb:0.00011,0.00000,0.11901,1.00000"
+  },
+  "groups" : [
+    {
+      "blend-mode" : "soft-light",
+      "blur-material" : 0.5,
+      "layers" : [
+        {
+          "fill" : {
+            "solid" : "extended-gray:0.00000,1.00000"
+          },
+          "image-name" : "ellipse-001.svg",
+          "name" : "ellipse-001",
+          "opacity" : 1,
+          "position" : {
+            "scale" : 0.52,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "opacity" : 1,
+      "refractivity" : {
+        "depth" : 0.5204296875,
+        "enabled" : true,
+        "strength" : 0.8371484375
+      },
+      "shadow" : {
+        "kind" : "layer-color",
+        "opacity" : 0.48
+      },
+      "specular" : "outside",
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.58
+      }
+    },
+    {
+      "blur-material" : 0.5,
+      "layers" : [
+        {
+          "fill" : {
+            "solid" : "extended-srgb:1.00000,0.55294,0.15686,1.00000"
+          },
+          "image-name" : "ellipse-001.svg",
+          "name" : "ellipse-001",
+          "opacity" : 1,
+          "position" : {
+            "scale" : 0.7699999999999997,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "lighting" : "individual",
+      "refractivity" : {
+        "depth" : 0,
+        "enabled" : true,
+        "strength" : -0.3233203125
+      },
+      "shadow" : {
+        "kind" : "layer-color",
+        "opacity" : 0.24
+      },
+      "specular" : "inside",
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.75
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}

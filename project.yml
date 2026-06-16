@@ -31,6 +31,11 @@ targets:
     platform: iOS
     sources:
       - path: App
+        excludes:
+          - "AppIcon.icon"          # added explicitly below so XcodeGen treats the .icon as one bundle
+      - path: App/AppIcon.icon       # Icon Composer (Liquid Glass) app icon
+        type: file
+        buildPhase: resources
       - path: Library
       - path: Intents
       - path: Shaders
