@@ -33,8 +33,6 @@ public nonisolated enum Theme {
         public static let snappy = Animation.spring(response: 0.34, dampingFraction: 0.78)
         /// Softer settle for larger surfaces.
         public static let settle = Animation.spring(response: 0.5, dampingFraction: 0.85)
-        /// Liquid Glass morphs — springy with a little overshoot so glass "gels" into place.
-        public static let glass = Animation.spring(response: 0.42, dampingFraction: 0.62)
         /// The bounce used when a control rubber-bands back from a bound.
         public static let bounce = Animation.interpolatingSpring(stiffness: 260, damping: 17)
 
