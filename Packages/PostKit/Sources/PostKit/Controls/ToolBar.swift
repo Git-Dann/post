@@ -65,12 +65,17 @@ public struct ToolBar: View {
         .scrollClipDisabled()
     }
 
+    private let chipSize: CGFloat = 54
+
     private func actionChip(_ action: ToolBarAction) -> some View {
         Button(action: action.handler) {
-            Image(systemName: action.systemImage)
-                .font(.system(size: 19, weight: .semibold))
-                .foregroundStyle(action.tinted ? .black : .white)
-                .frame(width: 54, height: 54)
+            Color.clear
+                .frame(width: chipSize, height: chipSize)
+                .overlay(
+                    Image(systemName: action.systemImage)
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(action.tinted ? .black : .white)
+                )
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -86,11 +91,14 @@ public struct ToolBar: View {
         return Button {
             onSelect(tool)
         } label: {
-            Image(systemName: tool.systemImage)
-                .font(.system(size: 19, weight: .semibold))
-                .foregroundStyle(isSelected ? .black : .white)
-                .symbolEffect(.bounce, value: isSelected)
-                .frame(width: 54, height: 54)
+            Color.clear
+                .frame(width: chipSize, height: chipSize)
+                .overlay(
+                    Image(systemName: tool.systemImage)
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(isSelected ? .black : .white)
+                        .symbolEffect(.bounce, value: isSelected)
+                )
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)

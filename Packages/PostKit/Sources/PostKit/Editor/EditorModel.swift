@@ -41,6 +41,14 @@ public final class EditorModel: Identifiable {
     }
 
     public var grainScale: CGFloat { max(1, 1 / previewScale) }
+
+    /// Aspect ratio (w/h) of the currently displayed image, so the editor can size the framed
+    /// card to the image and fill it with no letterbox. Reflects crop/rotation.
+    public var aspect: CGFloat {
+        let e = displayImage.extent
+        guard e.height > 0, !e.isInfinite, !e.isNull else { return 1 }
+        return e.width / e.height
+    }
     public var canUndo: Bool { !undoStack.isEmpty }
     public var canRedo: Bool { !redoStack.isEmpty }
     public var hasEdits: Bool { !state.isIdentity }

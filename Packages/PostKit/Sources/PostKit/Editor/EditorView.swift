@@ -46,15 +46,16 @@ public struct EditorView: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
+            // Near-full-screen framed card sized to the image's aspect (fills it, no letterbox).
+            // The chrome floats over it so the photo stays as large as possible.
+            framedImage
+                .aspectRatio(model.aspect, contentMode: .fit)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.horizontal, Theme.Space.s)
+
             VStack(spacing: 0) {
                 if showsChrome { topBar }
-
-                // The image as a framed, rounded card on the black canvas — never full-bleed.
-                framedImage
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(.horizontal, Theme.Space.m)
-                    .padding(.vertical, Theme.Space.s)
-
+                Spacer(minLength: 0)
                 if !model.isCropping {
                     if showStyles {
                         stylePanel
@@ -112,8 +113,14 @@ public struct EditorView: View {
     // MARK: Top bar
 
     private var topBar: some View {
-        HStack {
-            GlassIconButton("square.grid.2x2") { onCancel() }
+        HStack(alignment: .top) {
+            // Gallery (back) with the smaller info button tucked beneath it.
+            VStack(alignment: .leading, spacing: Theme.Space.s) {
+                GlassIconButton("square.grid.2x2") { onCancel() }
+                GlassIconButton("info", size: 38) { showInfo = true }
+                    .disabled(model.originalData == nil)
+                    .opacity(model.originalData == nil ? 0.35 : 1)
+            }
             Spacer()
             HStack(spacing: Theme.Space.s) {
                 GlassIconButton("arrow.uturn.backward") { model.undo() }
@@ -124,14 +131,9 @@ public struct EditorView: View {
                     .opacity(model.canRedo ? 1 : 0.35)
             }
             Spacer()
-            HStack(spacing: Theme.Space.s) {
-                GlassIconButton("info") { showInfo = true }
-                    .disabled(model.originalData == nil)
-                    .opacity(model.originalData == nil ? 0.35 : 1)
-                GlassIconButton(isExporting ? "ellipsis" : "square.and.arrow.up") { share() }
-                    .disabled(isExporting || exporter == nil)
-                    .opacity(exporter == nil ? 0.35 : 1)
-            }
+            GlassIconButton(isExporting ? "ellipsis" : "square.and.arrow.up") { share() }
+                .disabled(isExporting || exporter == nil)
+                .opacity(exporter == nil ? 0.35 : 1)
         }
         .padding(.horizontal, Theme.Space.l)
         .padding(.top, Theme.Space.s)
@@ -237,8 +239,7 @@ public struct EditorView: View {
     }
 
     private var actionRow: some View {
-        // The grid button (top-left) handles "back", so no separate cancel here.
-        // Done is the clear primary; the trash reverts all edits to the original (disabled when clean).
+        // Just Done — the grid button (top-left) handles "back", and undo/redo handle reverting.
         Button { onDone(model.state) } label: {
             Text("Done")
                 .font(.system(.headline, design: .rounded))
@@ -249,11 +250,6 @@ public struct EditorView: View {
         .tint(.white)
         .foregroundStyle(.black)
         .frame(maxWidth: .infinity)
-        .overlay(alignment: .trailing) {
-            GlassIconButton("arrow.uturn.backward.circle") { model.reset() }
-                .disabled(!model.hasEdits)
-                .opacity(model.hasEdits ? 1 : 0.35)
-        }
         .padding(.horizontal, Theme.Space.l)
     }
 

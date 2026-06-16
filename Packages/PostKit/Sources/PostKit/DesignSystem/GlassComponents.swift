@@ -6,21 +6,27 @@ public struct GlassIconButton: View {
     private let systemName: String
     private let action: () -> Void
     private let prominent: Bool
+    private let size: CGFloat
 
     @State private var pressed = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    public init(_ systemName: String, prominent: Bool = false, action: @escaping () -> Void) {
+    public init(_ systemName: String, prominent: Bool = false, size: CGFloat = 48, action: @escaping () -> Void) {
         self.systemName = systemName
         self.prominent = prominent
+        self.size = size
         self.action = action
     }
 
     public var body: some View {
         Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 18, weight: .semibold))
-                .frame(width: 48, height: 48)
+            // Icon as a centered overlay on a fixed square → always perfectly centered.
+            Color.clear
+                .frame(width: size, height: size)
+                .overlay(
+                    Image(systemName: systemName)
+                        .font(.system(size: size * 0.38, weight: .semibold))
+                )
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
