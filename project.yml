@@ -33,6 +33,7 @@ targets:
       - path: App
       - path: Library
       - path: Intents
+      - path: Shaders
     dependencies:
       - package: PostKit
       - target: PostShareExtension
@@ -46,13 +47,14 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: co.gitwork.post
         PRODUCT_NAME: Post
+        OTHER_METAL_FLAGS: "-fcikernel"
+        MTLLINKER_FLAGS: "-fcikernel"
         INFOPLIST_KEY_CFBundleDisplayName: Post
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: "Post saves your finished edits straight to your photo library."
         INFOPLIST_KEY_NSCameraUsageDescription: "Snap a photo to edit right away."
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
-        INFOPLIST_KEY_UIRequiresFullScreen: YES
         INFOPLIST_KEY_UIStatusBarStyle: UIStatusBarStyleLightContent
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
@@ -62,6 +64,7 @@ targets:
     platform: iOS
     sources:
       - path: ShareExtension
+      - path: Shaders
     dependencies:
       - package: PostKit
     info:
@@ -85,6 +88,8 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: NO
         PRODUCT_BUNDLE_IDENTIFIER: co.gitwork.post.ShareExtension
+        OTHER_METAL_FLAGS: "-fcikernel"
+        MTLLINKER_FLAGS: "-fcikernel"
         INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: "Post saves your edited photo to your library."
 
   PostPhotosExtension:
@@ -92,6 +97,7 @@ targets:
     platform: iOS
     sources:
       - path: PhotosExtension
+      - path: Shaders
     dependencies:
       - package: PostKit
     info:
@@ -115,6 +121,8 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: NO
         PRODUCT_BUNDLE_IDENTIFIER: co.gitwork.post.PhotosExtension
+        OTHER_METAL_FLAGS: "-fcikernel"
+        MTLLINKER_FLAGS: "-fcikernel"
 
   PostKitTests:
     type: bundle.unit-test

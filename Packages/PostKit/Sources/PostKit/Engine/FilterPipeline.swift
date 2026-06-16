@@ -99,47 +99,23 @@ public enum FilterPipeline {
         return f.outputImage ?? image
     }
 
-    // MARK: Grain (no single CIFilter — a composite: noise → mono → intensity → overlay)
+    // MARK: Grain (Core Image Metal kernel — see Shaders/Grain.metal)
+
+    /// Loaded once from the host bundle's metallib. `nonisolated(unsafe)` because `CIColorKernel`
+    /// isn't `Sendable`, but it's immutable after creation and safe to apply concurrently.
+    nonisolated(unsafe) private static let grainKernel: CIColorKernel? = {
+        guard let url = Bundle.main.url(forResource: "default", withExtension: "metallib"),
+              let data = try? Data(contentsOf: url) else { return nil }
+        return try? CIColorKernel(functionName: "postGrain", fromMetalLibraryData: data)
+    }()
 
     static nonisolated func applyGrain(_ base: CIImage, amount: Double, grainScale: CGFloat) -> CIImage {
-        guard amount > 0 else { return base }
+        guard amount > 0, let kernel = grainKernel else { return base }
         let extent = base.extent
-        guard !extent.isInfinite, !extent.isNull, !extent.isEmpty,
-              let raw = CIFilter.randomGenerator().outputImage else { return base }
+        guard !extent.isInfinite, !extent.isNull, !extent.isEmpty else { return base }
 
-        // Fine monochrome film grain. CIRandomGenerator is deterministic, so it's stable.
-        let mono = CIFilter.colorMatrix()
-        mono.inputImage = raw
-        let luma = CIVector(x: 0.2126, y: 0.7152, z: 0.0722, w: 0)
-        mono.rVector = luma
-        mono.gVector = luma
-        mono.bVector = luma
-        mono.aVector = CIVector(x: 0, y: 0, z: 0, w: 0)
-        mono.biasVector = CIVector(x: 0, y: 0, z: 0, w: 1)
-        var noise = (mono.outputImage ?? raw).cropped(to: extent)
-
-        // A whisper of blur takes the hard edge off the noise without turning it into clumps.
-        let blur = CIFilter.gaussianBlur()
-        blur.inputImage = noise
-        blur.radius = 0.5
-        noise = (blur.outputImage ?? noise).cropped(to: extent)
-
-        // Pull strongly toward neutral 0.5 so grain stays a subtle texture; soft-light of flat 0.5
-        // is a no-op. Low cap keeps even max grain gentle.
-        let amt = CGFloat(min(max(amount, 0), 1)) * 0.15
-        let intensity = CIFilter.colorMatrix()
-        intensity.inputImage = noise
-        intensity.rVector = CIVector(x: amt, y: 0, z: 0, w: 0)
-        intensity.gVector = CIVector(x: 0, y: amt, z: 0, w: 0)
-        intensity.bVector = CIVector(x: 0, y: 0, z: amt, w: 0)
-        intensity.aVector = CIVector(x: 0, y: 0, z: 0, w: 0)
-        let mid = 0.5 * (1 - amt)
-        intensity.biasVector = CIVector(x: mid, y: mid, z: mid, w: 1)
-        noise = (intensity.outputImage ?? noise).cropped(to: extent)
-
-        let blend = CIFilter.softLightBlendMode()   // gentle, filmic texture
-        blend.backgroundImage = base
-        blend.inputImage = noise
-        return (blend.outputImage ?? base).cropped(to: extent)
+        let strength = Float(min(max(amount, 0), 1) * 0.22)   // tasteful cap
+        let size = Float(1.4 * grainScale)                    // match preview/export density
+        return kernel.apply(extent: extent, arguments: [base, strength, size]) ?? base
     }
 }
