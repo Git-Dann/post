@@ -64,25 +64,50 @@ public struct MetalImageView: UIViewRepresentable {
 
         private weak var view: MTKView?
         private var displayLink: CADisplayLink?
+        /// The last image we actually rendered, by identity — recompute() yields a fresh CIImage
+        /// each edit, so an unchanged identity means "nothing new to draw".
+        private var lastImage: CIImage?
+        private var needsRedraw = true
 
-        /// Drive `draw()` every frame via a CADisplayLink in `.common` modes — crucially, `.common`
-        /// includes `UITrackingRunLoopMode`, so frames keep coming while a dial is being dragged.
+        /// Drive `draw()` via a CADisplayLink in `.common` modes — crucially, `.common` includes
+        /// `UITrackingRunLoopMode`, so frames keep coming while a dial is being dragged. We only
+        /// actually submit GPU work when the image changed (see `step`), and pause entirely while
+        /// the app isn't active — submitting from the background is forbidden and floods the log.
         func startRendering(into view: MTKView) {
             self.view = view
             let link = CADisplayLink(target: self, selector: #selector(step))
             link.add(to: .main, forMode: .common)
             displayLink = link
+            let nc = NotificationCenter.default
+            nc.addObserver(self, selector: #selector(appWillResignActive),
+                           name: UIApplication.willResignActiveNotification, object: nil)
+            nc.addObserver(self, selector: #selector(appDidBecomeActive),
+                           name: UIApplication.didBecomeActiveNotification, object: nil)
         }
 
         func stopRendering() {
+            NotificationCenter.default.removeObserver(self)
             displayLink?.invalidate()
             displayLink = nil
             view = nil
         }
 
+        @objc private func appWillResignActive() { displayLink?.isPaused = true }
+        @objc private func appDidBecomeActive() {
+            needsRedraw = true            // repaint once on return
+            displayLink?.isPaused = false
+        }
+
         @objc private func step() {
             // The link is added to the main run loop, so we're on the main thread here.
-            MainActor.assumeIsolated { view?.draw() }
+            MainActor.assumeIsolated {
+                let current = provider?()
+                // Skip frames with nothing new — saves battery and avoids needless GPU work.
+                guard needsRedraw || current !== lastImage else { return }
+                lastImage = current
+                needsRedraw = false
+                view?.draw()
+            }
         }
 
         override init() {
@@ -101,18 +126,11 @@ public struct MetalImageView: UIViewRepresentable {
             super.init()
         }
 
-        public func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
-
-        #if DEBUG
-        /// Counts every draw() invocation — used by the `--tracking-test` hook to prove the preview
-        /// keeps rendering while the run loop is in gesture-tracking mode.
-        public static var debugDrawCount = 0
-        #endif
+        public func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
+            needsRedraw = true   // the drawable resized (rotation/layout) — repaint even if the image is unchanged
+        }
 
         public func draw(in view: MTKView) {
-            #if DEBUG
-            Self.debugDrawCount += 1
-            #endif
             // MTKView always calls draw on the main thread, so the main-actor provider is safe here.
             let displayImage = MainActor.assumeIsolated { provider?() }
             guard let displayImage,

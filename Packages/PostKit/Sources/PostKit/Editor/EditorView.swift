@@ -90,19 +90,6 @@ public struct EditorView: View {
                     }
                 }
             }
-            if args.contains("--tracking-test") {
-                // Prove the preview keeps drawing while the run loop is in the SAME mode a finger
-                // drag uses (UITrackingRunLoopMode). Spin a nested run loop in that mode and count
-                // draws — if frames > 0, live preview works during a real drag.
-                try? await Task.sleep(for: .milliseconds(900))
-                DispatchQueue.main.async {
-                    let c0 = MetalImageView.Renderer.debugDrawCount
-                    let trackingMode = CFRunLoopMode(rawValue: "UITrackingRunLoopMode" as CFString)
-                    CFRunLoopRunInMode(trackingMode, 1.0, false)   // the mode a finger drag uses
-                    let c1 = MetalImageView.Renderer.debugDrawCount
-                    NSLog("POSTTRACKINGTEST frames-during-tracking=%d", c1 - c0)
-                }
-            }
             if args.contains("--demo-style") {
                 showStyles = true
                 if let style = styleProvider.styles.first(where: { $0.id == "film" }) {
