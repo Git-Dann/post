@@ -42,8 +42,9 @@ public struct MetalImageView: UIViewRepresentable {
     }
 
     public func updateUIView(_ view: MTKView, context: Context) {
+        // Just refresh the source; the CADisplayLink draws once per frame. (Don't draw() here too —
+        // a second draw in the same frame can't get a drawable and the render fails.)
         context.coordinator.provider = provider
-        view.draw()   // render immediately on any SwiftUI update, in addition to the display link
     }
 
     public static func dismantleUIView(_ view: MTKView, coordinator: Renderer) {
@@ -102,7 +103,16 @@ public struct MetalImageView: UIViewRepresentable {
 
         public func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
+        #if DEBUG
+        /// Counts every draw() invocation — used by the `--tracking-test` hook to prove the preview
+        /// keeps rendering while the run loop is in gesture-tracking mode.
+        public static var debugDrawCount = 0
+        #endif
+
         public func draw(in view: MTKView) {
+            #if DEBUG
+            Self.debugDrawCount += 1
+            #endif
             // MTKView always calls draw on the main thread, so the main-actor provider is safe here.
             let displayImage = MainActor.assumeIsolated { provider?() }
             guard let displayImage,
