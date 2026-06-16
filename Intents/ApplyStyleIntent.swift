@@ -4,7 +4,7 @@ import Foundation
 
 /// The bundled looks, exposed to Shortcuts and the Action button. Kept in sync with `styles.json`.
 enum StyleChoice: String, AppEnum {
-    case faded, warm, film, punch, mono, noir
+    case faded, warm, film, punch, mono, noir, cool, vivid, sepia, dream
 
     static var typeDisplayRepresentation: TypeDisplayRepresentation { "Look" }
 
@@ -15,7 +15,11 @@ enum StyleChoice: String, AppEnum {
             .film: "Film",
             .punch: "Punch",
             .mono: "Mono",
-            .noir: "Noir"
+            .noir: "Noir",
+            .cool: "Cool",
+            .vivid: "Vivid",
+            .sepia: "Sepia",
+            .dream: "Dream"
         ]
     }
 }

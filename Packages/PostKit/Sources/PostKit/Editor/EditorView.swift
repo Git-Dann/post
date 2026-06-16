@@ -15,6 +15,7 @@ public struct EditorView: View {
     @State private var showStyles = false
     @State private var shareItem: ShareItem?
     @State private var isExporting = false
+    @State private var isComparing = false
 
     /// - Parameters:
     ///   - exporter: produces a shareable file URL for the given recipe (full-res export),
@@ -42,8 +43,22 @@ public struct EditorView: View {
     public var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            MetalImageView(image: model.displayImage)
+            MetalImageView(image: isComparing ? model.source : model.displayImage)
                 .ignoresSafeArea()
+                .overlay(alignment: .top) {
+                    if isComparing {
+                        GlassPill("Original")
+                            .padding(.top, 80)
+                            .transition(.opacity.combined(with: .scale))
+                    }
+                }
+                // Press and hold anywhere on the image to compare against the original.
+                .onLongPressGesture(minimumDuration: 0.18, maximumDistance: 60) {
+                } onPressingChanged: { pressing in
+                    guard model.hasEdits else { return }
+                    withAnimation(Theme.Motion.snappy) { isComparing = pressing }
+                    if pressing { Haptics.impact(.soft) }
+                }
 
             VStack(spacing: 0) {
                 if showsChrome { topBar }

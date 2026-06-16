@@ -20,8 +20,12 @@ struct StylesTests {
     func bundled() async throws {
         let manifest = try await BundledStyleSource().load()
         #expect(manifest.version >= 1)
-        #expect(manifest.styles.count >= 5)
+        #expect(manifest.styles.count >= 8)
         #expect(manifest.styles.contains { $0.id == "film" })
-        #expect(manifest.styles.contains { $0.id == "mono" })
+        #expect(manifest.styles.contains { $0.id == "dream" })
+        // Every shipped look must actually change the image.
+        #expect(manifest.styles.allSatisfy { !$0.recipe.isIdentity })
+        // Ids must be unique.
+        #expect(Set(manifest.styles.map(\.id)).count == manifest.styles.count)
     }
 }
