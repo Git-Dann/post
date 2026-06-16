@@ -1,5 +1,4 @@
 import SwiftUI
-import AudioToolbox
 
 /// The signature control: a horizontal, machined-wheel tick ruler. Drag scrolls the ticks under
 /// a fixed center indicator; the value snaps to detents with a per-tick selection haptic, a heavier
@@ -15,7 +14,8 @@ public struct HapticDial: View {
     private let onBegin: () -> Void
     private let onCommit: () -> Void
 
-    private let tickSpacing: CGFloat = 10
+    // Wider tick spacing = more finger travel per detent = finer, more deliberate edits.
+    private let tickSpacing: CGFloat = 17
     private var pointsPerUnit: CGFloat { tickSpacing / detent }
     private var isBipolar: Bool { range.lowerBound < 0 }
 
@@ -57,11 +57,16 @@ public struct HapticDial: View {
         }
         .frame(height: 64)
         .sensoryFeedback(trigger: detentIndex) { _, newValue in
-            newValue == 0 && isBipolar ? .impact(weight: .heavy, intensity: 0.85) : .selection
+            // Crisper, more forceful per-tick feedback than the light .selection tap;
+            // a full-strength thunk when landing on the zero/center detent.
+            newValue == 0 && isBipolar
+                ? .impact(weight: .heavy, intensity: 1.0)
+                : .impact(weight: .medium, intensity: 0.65)
         }
-        .sensoryFeedback(.impact(flexibility: .rigid, intensity: 0.7), trigger: boundHits)
+        .sensoryFeedback(.impact(flexibility: .rigid, intensity: 0.9), trigger: boundHits)
+        .onAppear { if soundEnabled { DialSound.prepare() } }
         .onChange(of: detentIndex) { _, newValue in
-            if soundEnabled { AudioServicesPlaySystemSound(1104) }   // soft "tock" per tick
+            if soundEnabled { DialSound.tick() }
             guard newValue == 0, isBipolar, !reduceMotion else { return }
             indicatorScale = 1.6   // popped, then springs back to 1
             withAnimation(.spring(response: 0.4, dampingFraction: 0.45)) { indicatorScale = 1 }

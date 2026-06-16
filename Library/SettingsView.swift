@@ -6,6 +6,7 @@ import PostKit
 struct SettingsView: View {
     @AppStorage("removeLocationOnExport") private var removeLocation = false
     @AppStorage("soundEffectsEnabled") private var soundEnabled = false
+    @AppStorage(AccentChoice.storageKey) private var accentRaw = AccentChoice.amber.rawValue
     @Environment(\.dismiss) private var dismiss
 
     private var version: String {
@@ -20,6 +21,7 @@ struct SettingsView: View {
                 ScrollView {
                     VStack(spacing: Theme.Space.l) {
                         promise
+                        appearance
                         exportOptions
                         Text(version)
                             .font(.footnote)
@@ -69,6 +71,35 @@ struct SettingsView: View {
                 .font(.subheadline)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    private var appearance: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            Text("Accent color")
+                .font(.subheadline.weight(.medium))
+            HStack {
+                ForEach(AccentChoice.allCases) { choice in
+                    Button {
+                        accentRaw = choice.rawValue
+                        Haptics.selection()
+                    } label: {
+                        Circle()
+                            .fill(choice.color)
+                            .frame(width: 32, height: 32)
+                            .overlay(
+                                Circle().strokeBorder(.white, lineWidth: accentRaw == choice.rawValue ? 3 : 0)
+                            )
+                            .overlay(Circle().strokeBorder(.white.opacity(0.15), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(choice.name)
+                    if choice != AccentChoice.allCases.last { Spacer() }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Theme.Space.l)
+        .glassEffect(in: .rect(cornerRadius: Theme.Radius.card))
     }
 
     private var exportOptions: some View {

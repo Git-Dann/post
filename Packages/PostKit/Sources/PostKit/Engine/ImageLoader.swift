@@ -2,6 +2,7 @@ import CoreImage
 import CoreImage.CIFilterBuiltins
 import ImageIO
 import CoreGraphics
+import UniformTypeIdentifiers
 
 /// Decodes image data into Core Image, handling orientation and producing a downscaled
 /// preview for interactive editing. Orientation is baked in exactly once, here, so the rest
@@ -65,5 +66,57 @@ public enum ImageLoader {
             return [:]
         }
         return props
+    }
+
+    /// A single labelled metadata row for the info panel.
+    public nonisolated struct MetaRow: Identifiable, Sendable {
+        public let id = UUID()
+        public let label: String
+        public let value: String
+    }
+
+    /// A friendly, human-readable metadata summary (format, size, capture info) for the info panel.
+    public static nonisolated func metadata(from data: Data) -> [MetaRow] {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return [] }
+        let props = (CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any]) ?? [:]
+        var rows: [MetaRow] = []
+
+        if let typeID = CGImageSourceGetType(source) as String?, let utType = UTType(typeID) {
+            rows.append(MetaRow(label: "Format", value: utType.localizedDescription ?? typeID))
+        }
+        if let w = props[kCGImagePropertyPixelWidth as String] as? Int,
+           let h = props[kCGImagePropertyPixelHeight as String] as? Int {
+            rows.append(MetaRow(label: "Dimensions", value: "\(w) × \(h)"))
+            let mp = Double(w * h) / 1_000_000
+            rows.append(MetaRow(label: "Resolution", value: String(format: "%.1f MP", mp)))
+        }
+        rows.append(MetaRow(label: "File size", value: byteSize(data.count)))
+
+        let exif = props[kCGImagePropertyExifDictionary as String] as? [String: Any] ?? [:]
+        let tiff = props[kCGImagePropertyTIFFDictionary as String] as? [String: Any] ?? [:]
+
+        if let date = exif[kCGImagePropertyExifDateTimeOriginal as String] as? String {
+            rows.append(MetaRow(label: "Captured", value: date))
+        }
+        if let make = tiff[kCGImagePropertyTIFFMake as String] as? String,
+           let model = tiff[kCGImagePropertyTIFFModel as String] as? String {
+            rows.append(MetaRow(label: "Camera", value: "\(make) \(model)"))
+        }
+        if let lens = exif[kCGImagePropertyExifLensModel as String] as? String {
+            rows.append(MetaRow(label: "Lens", value: lens))
+        }
+        if let f = exif[kCGImagePropertyExifFNumber as String] as? Double {
+            rows.append(MetaRow(label: "Aperture", value: String(format: "ƒ/%.1f", f)))
+        }
+        if let iso = (exif[kCGImagePropertyExifISOSpeedRatings as String] as? [Int])?.first {
+            rows.append(MetaRow(label: "ISO", value: "\(iso)"))
+        }
+        return rows
+    }
+
+    private static nonisolated func byteSize(_ bytes: Int) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: Int64(bytes))
     }
 }

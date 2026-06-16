@@ -8,11 +8,14 @@ struct PostApp: App {
     /// extensions write to, so edits made there appear in the library. File-protected at rest.
     let modelContainer = ProjectStore.makeContainer()
 
+    /// Drives a live re-tint of the whole tree when the accent is changed in Settings.
+    @AppStorage(AccentChoice.storageKey) private var accentRaw = AccentChoice.amber.rawValue
+
     var body: some Scene {
         WindowGroup {
             GalleryView()
                 .preferredColorScheme(.dark)
-                .tint(Theme.accent)
+                .tint((AccentChoice(rawValue: accentRaw) ?? .amber).color)
         }
         .modelContainer(modelContainer)
     }

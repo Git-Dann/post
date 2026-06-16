@@ -81,7 +81,7 @@ public struct ToolBar: View {
         }
         .buttonStyle(.plain)
         .glassEffect(
-            action.tinted ? .regular.tint(Theme.accent).interactive() : .regular.interactive(),
+            action.tinted ? .regular.tint(Theme.accent.opacity(0.78)).interactive() : .regular.interactive(),
             in: .circle
         )
         .accessibilityLabel(action.title)
@@ -101,7 +101,7 @@ public struct ToolBar: View {
         }
         .buttonStyle(.plain)
         .glassEffect(
-            isSelected ? .regular.tint(Theme.accent).interactive() : .regular.interactive(),
+            isSelected ? .regular.tint(Theme.accent.opacity(0.78)).interactive() : .regular.interactive(),
             in: .circle
         )
         .glassEffectID(tool, in: glass)

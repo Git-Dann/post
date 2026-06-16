@@ -16,6 +16,7 @@ public struct EditorView: View {
     @State private var shareItem: ShareItem?
     @State private var isExporting = false
     @State private var isComparing = false
+    @State private var showInfo = false
     @AppStorage("soundEffectsEnabled") private var soundEnabled = false
 
     /// - Parameters:
@@ -109,7 +110,9 @@ public struct EditorView: View {
             }
             Spacer()
             HStack(spacing: Theme.Space.s) {
-                GlassPill(exportFormatLabel)
+                GlassIconButton("info") { showInfo = true }
+                    .disabled(model.originalData == nil)
+                    .opacity(model.originalData == nil ? 0.35 : 1)
                 GlassIconButton(isExporting ? "ellipsis" : "square.and.arrow.up") { share() }
                     .disabled(isExporting || exporter == nil)
                     .opacity(exporter == nil ? 0.35 : 1)
@@ -119,6 +122,9 @@ public struct EditorView: View {
         .padding(.top, Theme.Space.s)
         .sheet(item: $shareItem) { item in
             ActivityView(items: [item.url])
+        }
+        .sheet(isPresented: $showInfo) {
+            MetadataView(rows: model.originalData.map { ImageLoader.metadata(from: $0) } ?? [])
         }
     }
 
@@ -216,20 +222,20 @@ public struct EditorView: View {
     }
 
     private var actionRow: some View {
-        HStack {
-            GlassIconButton("xmark") { onCancel() }
-            Spacer()
-            Button { onDone(model.state) } label: {
-                Text("Done")
-                    .font(.system(.headline, design: .rounded))
-                    .padding(.horizontal, Theme.Space.xl)
-                    .padding(.vertical, 14)
-            }
-            .buttonStyle(.glassProminent)
-            .tint(.white)
-            .foregroundStyle(.black)
-            Spacer()
-            GlassIconButton("trash") { model.reset() }
+        // The grid button (top-left) handles "back", so no separate cancel here.
+        // Done is the clear primary; the trash reverts all edits to the original (disabled when clean).
+        Button { onDone(model.state) } label: {
+            Text("Done")
+                .font(.system(.headline, design: .rounded))
+                .padding(.horizontal, Theme.Space.xl)
+                .padding(.vertical, 14)
+        }
+        .buttonStyle(.glassProminent)
+        .tint(.white)
+        .foregroundStyle(.black)
+        .frame(maxWidth: .infinity)
+        .overlay(alignment: .trailing) {
+            GlassIconButton("arrow.uturn.backward.circle") { model.reset() }
                 .disabled(!model.hasEdits)
                 .opacity(model.hasEdits ? 1 : 0.35)
         }

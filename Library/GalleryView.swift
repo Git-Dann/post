@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import PhotosUI
+import Photos
 import UIKit
 import CoreImage
 import PostKit
@@ -13,53 +14,42 @@ private struct EditorSession: Identifiable {
     let project: Project?
 }
 
-/// The home surface: a grid of re-editable projects with a PhotosPicker import. Tapping a project
-/// reopens it with its saved recipe restored; finishing an edit saves the recipe and a thumbnail.
+/// Per-project info sheet payload.
+private struct InfoSheet: Identifiable {
+    let id = UUID()
+    let rows: [ImageLoader.MetaRow]
+}
+
+/// The home surface: a grid of re-editable projects with a clean floating glass header (no nav-bar
+/// artifacts) and an import flow that supports one-by-one or many photos, with an explicit
+/// full-library-access option.
 struct GalleryView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Project.modifiedAt, order: .reverse) private var projects: [Project]
 
-    @State private var pickerItem: PhotosPickerItem?
+    @State private var pickerItems: [PhotosPickerItem] = []
     @State private var session: EditorSession?
     @State private var showSettings = false
+    @State private var showImportOptions = false
+    @State private var showPicker = false
+    @State private var infoSheet: InfoSheet?
     @AppStorage("removeLocationOnExport") private var removeLocation = false
 
     private let columns = [GridItem(.adaptive(minimum: 110), spacing: Theme.Space.m)]
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Theme.canvas.ignoresSafeArea()
+        ZStack {
+            Theme.canvas.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                header
+                titleBar
                 if projects.isEmpty {
                     emptyState
                 } else {
                     grid
                 }
             }
-            .navigationTitle("Post")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { showSettings = true } label: {
-                        Image(systemName: "gearshape")
-                            .font(.system(size: 17, weight: .semibold))
-                            .frame(width: 44, height: 44)
-                            .glassEffect(.regular.interactive(), in: .circle)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Settings")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    PhotosPicker(selection: $pickerItem, matching: .images, photoLibrary: .shared()) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 18, weight: .semibold))
-                            .frame(width: 44, height: 44)
-                            .glassEffect(.regular.tint(Theme.accent).interactive(), in: .circle)
-                    }
-                }
-            }
-        }
-        .sheet(isPresented: $showSettings) {
-            SettingsView()
         }
         .fullScreenCover(item: $session) { session in
             EditorView(
@@ -69,24 +59,51 @@ struct GalleryView: View {
                 onCancel: { self.session = nil }
             )
         }
-        .onChange(of: pickerItem) { _, item in
-            guard let item else { return }
-            importPhoto(item)
+        .sheet(isPresented: $showSettings) { SettingsView() }
+        .sheet(item: $infoSheet) { sheet in MetadataView(rows: sheet.rows) }
+        .photosPicker(isPresented: $showPicker, selection: $pickerItems, matching: .images, photoLibrary: .shared())
+        .confirmationDialog("Add photos", isPresented: $showImportOptions, titleVisibility: .visible) {
+            Button("Choose Photos") { showPicker = true }
+            Button("Allow Full Library Access…") { requestFullAccessThenPick() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Pick one or many. Post only ever reads photos you choose — grant full access only if you'd like to import freely.")
+        }
+        .onChange(of: pickerItems) { _, items in
+            guard !items.isEmpty else { return }
+            importItems(items)
         }
         .task {
             #if DEBUG
             let args = ProcessInfo.processInfo.arguments
-            if args.contains("--seed-project"), projects.isEmpty {
-                seedSampleProject()
-            }
-            if args.contains("--open-sample-editor") {
-                openSample()
-            }
-            if args.contains("--open-settings") {
-                showSettings = true
-            }
+            if args.contains("--seed-project"), projects.isEmpty { seedSampleProject() }
+            if args.contains("--open-sample-editor") { openSample() }
+            if args.contains("--open-settings") { showSettings = true }
             #endif
         }
+    }
+
+    // MARK: Header & title
+
+    private var header: some View {
+        HStack {
+            GlassIconButton("gearshape") { showSettings = true }
+            Spacer()
+            GlassIconButton("plus", prominent: true) { showImportOptions = true }
+        }
+        .padding(.horizontal, Theme.Space.l)
+        .padding(.top, Theme.Space.s)
+    }
+
+    private var titleBar: some View {
+        HStack {
+            Text("Post")
+                .font(.system(size: 34, weight: .bold, design: .rounded))
+            Spacer()
+        }
+        .padding(.horizontal, Theme.Space.l)
+        .padding(.top, Theme.Space.s)
+        .padding(.bottom, Theme.Space.m)
     }
 
     private var grid: some View {
@@ -96,50 +113,68 @@ struct GalleryView: View {
                     Button { open(project) } label: { ProjectCard(project: project) }
                         .buttonStyle(.plain)
                         .contextMenu {
+                            Button("Info", systemImage: "info.circle") { showInfo(for: project) }
                             Button("Delete", systemImage: "trash", role: .destructive) {
                                 ProjectStore.delete(project, in: modelContext)
                             }
                         }
                 }
             }
-            .padding(Theme.Space.l)
+            .padding(.horizontal, Theme.Space.l)
+            .padding(.bottom, Theme.Space.l)
         }
     }
 
     private var emptyState: some View {
-        PhotosPicker(selection: $pickerItem, matching: .images, photoLibrary: .shared()) {
-            VStack(spacing: Theme.Space.m) {
-                Image(systemName: "photo.on.rectangle.angled")
-                    .font(.system(size: 52, weight: .light))
-                    .foregroundStyle(Theme.accent)
-                    .symbolEffect(.breathe)
-                Text("Bring a photo to life")
-                    .font(.system(.title2, design: .rounded).weight(.semibold))
-                    .foregroundStyle(.primary)
-                Text("Tap to import a photo.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+        VStack {
+            Spacer()
+            Button { showImportOptions = true } label: {
+                VStack(spacing: Theme.Space.m) {
+                    Image(systemName: "photo.on.rectangle.angled")
+                        .font(.system(size: 52, weight: .light))
+                        .foregroundStyle(Theme.accent)
+                        .symbolEffect(.breathe)
+                    Text("Bring a photo to life")
+                        .font(.system(.title2, design: .rounded).weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text("Tap to import a photo.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
             }
-            .padding(Theme.Space.xl)
+            .buttonStyle(.plain)
+            Spacer()
+            Spacer()
         }
-        .buttonStyle(.plain)
     }
 
     // MARK: Actions
 
-    private func importPhoto(_ item: PhotosPickerItem) {
+    private func requestFullAccessThenPick() {
         Task {
-            defer { pickerItem = nil }
-            guard let data = try? await item.loadTransferable(type: Data.self),
-                  let loaded = ImageLoader.makeLoaded(from: data) else { return }
-            let model = EditorModel(source: loaded.preview, originalData: data, previewScale: loaded.previewScale)
-            let project = ProjectStore.create(
-                originalData: data,
-                state: model.state,
-                thumbnail: model.thumbnailData(),
-                in: modelContext
-            )
-            session = EditorSession(model: model, project: project)
+            _ = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
+            showPicker = true   // proceed regardless; the picker works either way
+        }
+    }
+
+    private func importItems(_ items: [PhotosPickerItem]) {
+        Task {
+            defer { pickerItems = [] }
+            var created: [(EditorModel, Project)] = []
+            for item in items {
+                guard let data = try? await item.loadTransferable(type: Data.self),
+                      let loaded = ImageLoader.makeLoaded(from: data) else { continue }
+                let model = EditorModel(source: loaded.preview, originalData: data, previewScale: loaded.previewScale)
+                if let project = ProjectStore.create(
+                    originalData: data, state: model.state, thumbnail: model.thumbnailData(), in: modelContext
+                ) {
+                    created.append((model, project))
+                }
+            }
+            // Open the editor only when a single photo was imported; bulk imports just populate the grid.
+            if created.count == 1, let (model, project) = created.first {
+                session = EditorSession(model: model, project: project)
+            }
         }
     }
 
@@ -151,6 +186,11 @@ struct GalleryView: View {
         session = EditorSession(model: model, project: project)
     }
 
+    private func showInfo(for project: Project) {
+        guard let data = Storage.readOriginal(fileName: project.originalFileName) else { return }
+        infoSheet = InfoSheet(rows: ImageLoader.metadata(from: data))
+    }
+
     private func finish(_ session: EditorSession, state: EditState) {
         if let project = session.project {
             ProjectStore.update(project, state: state, thumbnail: session.model.thumbnailData(), in: modelContext)
@@ -158,25 +198,16 @@ struct GalleryView: View {
         self.session = nil
     }
 
-    /// Full-resolution HEIC export to a temp file for the share sheet. Heavy render runs on the
-    /// `ImageExporter` actor, off the main thread.
     private func makeExporter(for model: EditorModel) -> (EditState) async -> URL? {
         { state in
             guard let data = model.originalData else { return nil }
             let exporter = ImageExporter()
             guard let output = try? await exporter.export(
                 imageData: data, state: state, format: .heic, stripLocation: removeLocation
-            ) else {
-                return nil
-            }
+            ) else { return nil }
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent("Post-\(UUID().uuidString).heic")
-            do {
-                try output.write(to: url)
-                return url
-            } catch {
-                return nil
-            }
+            do { try output.write(to: url); return url } catch { return nil }
         }
     }
 
@@ -186,7 +217,6 @@ struct GalleryView: View {
         session = EditorSession(model: model, project: nil)
     }
 
-    /// Seed a couple of saved projects (with looks applied) to exercise persistence + the grid.
     private func seedSampleProject() {
         let sample = SampleImage.make()
         guard let data = CIContext().jpegRepresentation(
@@ -211,9 +241,7 @@ private struct ProjectCard: View {
     var body: some View {
         Group {
             if let data = project.thumbnailData, let image = UIImage(data: data) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
+                Image(uiImage: image).resizable().scaledToFill()
             } else {
                 Theme.canvas
             }

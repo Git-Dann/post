@@ -9,8 +9,9 @@ public nonisolated enum Theme {
 
     // MARK: Brand color
 
-    /// Warm amber accent pulled from the reference shots (the tag chip / highlights).
-    public static let accent = Color(red: 0.98, green: 0.74, blue: 0.18)
+    /// The user-selected accent (defaults to warm amber). Computed so a change in Settings
+    /// propagates everywhere once the view tree re-renders.
+    public static var accent: Color { AccentChoice.current.color }
 
     /// The editor canvas is always near-black so the image is the hero.
     public static let canvas = Color(red: 0.05, green: 0.05, blue: 0.06)
@@ -47,5 +48,34 @@ public nonisolated enum Theme {
         public static let control: CGFloat = 22
         public static let card: CGFloat = 28
         public static let image: CGFloat = 32
+    }
+}
+
+/// The selectable accent colorways. Stored as a raw string in UserDefaults under "accentChoice".
+public nonisolated enum AccentChoice: String, CaseIterable, Identifiable, Sendable {
+    case amber, coral, pink, violet, blue, teal, green
+
+    public static let storageKey = "accentChoice"
+
+    public var id: String { rawValue }
+    public var name: String { rawValue.capitalized }
+
+    public var color: Color {
+        switch self {
+        case .amber:  Color(red: 0.98, green: 0.74, blue: 0.18)
+        case .coral:  Color(red: 1.00, green: 0.45, blue: 0.35)
+        case .pink:   Color(red: 0.96, green: 0.36, blue: 0.62)
+        case .violet: Color(red: 0.60, green: 0.40, blue: 0.95)
+        case .blue:   Color(red: 0.25, green: 0.55, blue: 1.00)
+        case .teal:   Color(red: 0.16, green: 0.78, blue: 0.74)
+        case .green:  Color(red: 0.40, green: 0.82, blue: 0.45)
+        }
+    }
+
+    /// The current choice from UserDefaults (defaults to amber).
+    public static var current: AccentChoice {
+        guard let raw = UserDefaults.standard.string(forKey: storageKey),
+              let choice = AccentChoice(rawValue: raw) else { return .amber }
+        return choice
     }
 }
