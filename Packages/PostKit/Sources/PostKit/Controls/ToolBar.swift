@@ -67,6 +67,9 @@ public struct ToolBar: View {
                 .padding(.vertical, 10)
             }
             .scrollClipDisabled()
+            // Soft fade at each end hints there's more beyond (Crop/Styles left, more tools right).
+            .overlay(alignment: .leading) { edgeFade(.leading) }
+            .overlay(alignment: .trailing) { edgeFade(.trailing) }
             .onAppear {
                 // Start scrolled so the first dial tool is at the leading edge (actions hidden left).
                 if !actions.isEmpty, let first = tools.first {
@@ -74,6 +77,16 @@ public struct ToolBar: View {
                 }
             }
         }
+    }
+
+    private func edgeFade(_ edge: HorizontalEdge) -> some View {
+        LinearGradient(
+            colors: edge == .leading ? [.black, .clear] : [.clear, .black],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+        .frame(width: 28)
+        .allowsHitTesting(false)
     }
 
     private let chipSize: CGFloat = 54
