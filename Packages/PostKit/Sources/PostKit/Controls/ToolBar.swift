@@ -59,8 +59,12 @@ public struct ToolBar: View {
                         }
                     }
                     .padding(.horizontal, Theme.Space.l)
+                    // Room so the selected chip's 1.12× scale and the glass halo aren't clipped.
+                    .padding(.vertical, 10)
                 }
             }
+            // Don't let the scroll view crop the scaled/raised chips top & bottom.
+            .scrollClipDisabled()
             .onChange(of: selected) { _, tool in
                 withAnimation(Theme.Motion.snappy) { proxy.scrollTo(tool, anchor: .center) }
             }
