@@ -6,36 +6,41 @@ public struct ToolBarAction: Identifiable {
     let title: String
     let systemImage: String
     let tinted: Bool
+    let showsDot: Bool
     let handler: () -> Void
 
     public init(id: String, title: String, systemImage: String, tinted: Bool = false,
-                handler: @escaping () -> Void) {
+                showsDot: Bool = false, handler: @escaping () -> Void) {
         self.id = id
         self.title = title
         self.systemImage = systemImage
         self.tinted = tinted
+        self.showsDot = showsDot
         self.handler = handler
     }
 }
 
 /// The scrollable strip of tools — leading action chips (Styles, Crop) followed by the selectable
-/// dial adjustments as circular Liquid Glass chips. The selected tool tints amber and lifts;
-/// selection morphs between chips via a shared glass namespace.
+/// dial adjustments as circular Liquid Glass chips. The selected tool tints; tools with an active
+/// edit show a small accent dot.
 public struct ToolBar: View {
     private let actions: [ToolBarAction]
     private let selected: EditTool
     private let tools: [EditTool]
+    private let editedTools: Set<EditTool>
     private let onSelect: (EditTool) -> Void
 
     public init(
         actions: [ToolBarAction] = [],
         selected: EditTool,
         tools: [EditTool] = EditTool.dialTools,
+        editedTools: Set<EditTool> = [],
         onSelect: @escaping (EditTool) -> Void
     ) {
         self.actions = actions
         self.selected = selected
         self.tools = tools
+        self.editedTools = editedTools
         self.onSelect = onSelect
     }
 
@@ -56,7 +61,7 @@ public struct ToolBar: View {
                     }
                 }
                 .padding(.horizontal, Theme.Space.l)
-                // Room so the selected chip's 1.12× scale and the glass halo aren't clipped.
+                // Room so the selected chip's 1.12× scale, the dot, and the glass halo aren't clipped.
                 .padding(.vertical, 10)
             }
         }
@@ -83,6 +88,7 @@ public struct ToolBar: View {
             action.tinted ? .regular.tint(Theme.accent.opacity(0.78)).interactive() : .regular.interactive(),
             in: .circle
         )
+        .overlay(alignment: .topTrailing) { editDot(action.showsDot) }
         .accessibilityLabel(action.title)
     }
 
@@ -108,7 +114,21 @@ public struct ToolBar: View {
         )
         .scaleEffect(isSelected ? 1.12 : 1)
         .animation(Theme.Motion.snappy, value: isSelected)
+        .overlay(alignment: .topTrailing) { editDot(editedTools.contains(tool)) }
         .accessibilityLabel(tool.title)
+        .accessibilityValue(editedTools.contains(tool) ? "Edited" : "")
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+
+    @ViewBuilder
+    private func editDot(_ show: Bool) -> some View {
+        if show {
+            Circle()
+                .fill(Theme.accent)
+                .frame(width: 10, height: 10)
+                .overlay(Circle().strokeBorder(Theme.canvas, lineWidth: 2))
+                .offset(x: -3, y: 3)
+                .transition(.scale.combined(with: .opacity))
+        }
     }
 }
