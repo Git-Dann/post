@@ -105,13 +105,12 @@ public struct CropOverlay: View {
         } label: {
             Text("Done")
                 .font(.system(.headline, design: .rounded))
-                .frame(maxWidth: .infinity)
+                .padding(.horizontal, Theme.Space.xl)
                 .padding(.vertical, 14)
-                .contentShape(.capsule)
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(.black)
-        .glassEffect(.regular.tint(.white.opacity(0.9)).interactive(), in: .capsule)
+        .buttonStyle(.glass)   // same native translucent glass + size as the editor's Done
+        .tint(.white)
+        .frame(maxWidth: .infinity)
         .overlay(alignment: .trailing) {
             GlassIconButton("xmark") { model.isCropping = false }
         }

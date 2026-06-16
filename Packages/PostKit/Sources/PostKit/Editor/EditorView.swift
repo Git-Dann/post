@@ -19,7 +19,7 @@ public struct EditorView: View {
     @State private var isAdjustingDial = false
     @State private var showInfo = false
     @State private var celebrate = false
-    @State private var doneGlow = false
+    @State private var doneFlourish = false
     @Namespace private var infoGlass
     @AppStorage("soundEffectsEnabled") private var soundEnabled = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -127,11 +127,10 @@ public struct EditorView: View {
             .overlay {
                 if celebrate {
                     Image(systemName: "sparkles")
-                        .font(.system(size: 46, weight: .semibold))
+                        .font(.system(size: 26, weight: .semibold))
                         .foregroundStyle(Theme.accent)
-                        .shadow(color: Theme.accent.opacity(0.6), radius: 12)
                         .symbolEffect(.bounce, value: celebrate)
-                        .transition(.scale(scale: 0.4).combined(with: .opacity))
+                        .transition(.scale(scale: 0.5).combined(with: .opacity))
                         .allowsHitTesting(false)
                 }
             }
@@ -371,28 +370,36 @@ public struct EditorView: View {
         Button { commitDone() } label: {
             Text("Done")
                 .font(.system(.headline, design: .rounded))
-                .frame(maxWidth: .infinity)
+                .padding(.horizontal, Theme.Space.xl)
                 .padding(.vertical, 14)
-                .contentShape(.capsule)
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(.black)
-        // Translucent ~90% Liquid Glass capsule (was a solid white prominent button).
-        .glassEffect(.regular.tint(.white.opacity(0.9)).interactive(), in: .capsule)
-        // "Save" flourish: the capsule glows when tapped (paired with the sparkle on the image).
-        .shadow(color: Theme.accent.opacity(doneGlow ? 0.8 : 0), radius: doneGlow ? 22 : 0)
+        // Native translucent Liquid Glass — its own press gives the touch-glow.
+        .buttonStyle(.glass)
+        .tint(.white)
+        // Very light "save" touch: a gentle pop + a small sparkle above the button.
+        .scaleEffect(doneFlourish ? 1.035 : 1)
+        .overlay(alignment: .top) {
+            if doneFlourish {
+                Image(systemName: "sparkle")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Theme.accent)
+                    .offset(y: -14)
+                    .transition(.scale(scale: 0.4).combined(with: .opacity))
+                    .allowsHitTesting(false)
+            }
+        }
+        .frame(maxWidth: .infinity)
         .overlay(alignment: .trailing) { resetButton }
         .padding(.horizontal, Theme.Space.l)
     }
 
-    /// Done is effectively "save": a quick glow + sparkle, then hand the recipe back.
+    /// Done is effectively "save" — a light pop + sparkle, then hand the recipe back.
     private func commitDone() {
-        Haptics.notify(.success)
+        Haptics.impact(.soft)
         guard !reduceMotion else { onDone(model.state); return }
-        triggerCelebrate()
-        withAnimation(.easeOut(duration: 0.45)) { doneGlow = true }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { doneFlourish = true }
         Task {
-            try? await Task.sleep(for: .milliseconds(380))
+            try? await Task.sleep(for: .milliseconds(180))
             onDone(model.state)
         }
     }
