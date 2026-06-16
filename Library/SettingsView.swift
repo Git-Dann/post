@@ -5,6 +5,7 @@ import PostKit
 /// export option that touches privacy: stripping location from shared images.
 struct SettingsView: View {
     @AppStorage("removeLocationOnExport") private var removeLocation = false
+    @AppStorage("soundEffectsEnabled") private var soundEnabled = false
     @Environment(\.dismiss) private var dismiss
 
     private var version: String {
@@ -71,12 +72,25 @@ struct SettingsView: View {
     }
 
     private var exportOptions: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.s) {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
             Toggle(isOn: $removeLocation) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Remove location from exports")
                         .font(.subheadline.weight(.medium))
                     Text("Strip GPS data when sharing or saving.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .tint(Theme.accent)
+
+            Divider().overlay(.white.opacity(0.1))
+
+            Toggle(isOn: $soundEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Dial sound effects")
+                        .font(.subheadline.weight(.medium))
+                    Text("A soft tick as the dial passes each mark.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

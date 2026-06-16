@@ -91,6 +91,7 @@ public struct ToolBar: View {
             Image(systemName: tool.systemImage)
                 .font(.system(size: 19, weight: .semibold))
                 .foregroundStyle(isSelected ? .black : .white)
+                .symbolEffect(.bounce, value: isSelected)
                 .frame(width: 54, height: 54)
                 .contentShape(Circle())
         }

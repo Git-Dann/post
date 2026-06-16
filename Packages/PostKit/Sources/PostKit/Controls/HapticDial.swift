@@ -1,14 +1,17 @@
 import SwiftUI
+import AudioToolbox
 
 /// The signature control: a horizontal, machined-wheel tick ruler. Drag scrolls the ticks under
 /// a fixed center indicator; the value snaps to detents with a per-tick selection haptic, a heavier
 /// "thunk" at the zero/center detent, and a rigid tap + rubber-band spring bounce at the bounds.
+/// A flick coasts with decelerating momentum, ticking past detents until it settles.
 ///
 /// Reusable: the editor adjustments and the crop straighten wheel both use it.
 public struct HapticDial: View {
     @Binding private var value: Double
     private let range: ClosedRange<Double>
     private let detent: Double
+    private let soundEnabled: Bool
     private let onBegin: () -> Void
     private let onCommit: () -> Void
 
@@ -21,18 +24,21 @@ public struct HapticDial: View {
     @State private var boundHits: Int = 0
     @State private var wasAtBound = false
     @State private var indicatorScale: CGFloat = 1
+    @State private var coastTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(
         value: Binding<Double>,
         range: ClosedRange<Double>,
         detent: Double,
+        soundEnabled: Bool = false,
         onBegin: @escaping () -> Void = {},
         onCommit: @escaping () -> Void = {}
     ) {
         self._value = value
         self.range = range
         self.detent = detent
+        self.soundEnabled = soundEnabled
         self.onBegin = onBegin
         self.onCommit = onCommit
     }
@@ -55,10 +61,12 @@ public struct HapticDial: View {
         }
         .sensoryFeedback(.impact(flexibility: .rigid, intensity: 0.7), trigger: boundHits)
         .onChange(of: detentIndex) { _, newValue in
+            if soundEnabled { AudioServicesPlaySystemSound(1104) }   // soft "tock" per tick
             guard newValue == 0, isBipolar, !reduceMotion else { return }
             indicatorScale = 1.6   // popped, then springs back to 1
             withAnimation(.spring(response: 0.4, dampingFraction: 0.45)) { indicatorScale = 1 }
         }
+        .onDisappear { coastTask?.cancel() }
         .accessibilityElement()
         .accessibilityLabel("Adjustment dial")
         .accessibilityValue(Text(String(format: "%.0f", value * 100)))
@@ -125,6 +133,7 @@ public struct HapticDial: View {
         DragGesture(minimumDistance: 0)
             .onChanged { gesture in
                 if dragStart == nil {
+                    coastTask?.cancel()          // grabbing the wheel stops any coast
                     dragStart = value
                     onBegin()
                 }
@@ -144,14 +153,48 @@ public struct HapticDial: View {
                     setValue((raw / detent).rounded() * detent)
                 }
             }
-            .onEnded { _ in
+            .onEnded { gesture in
                 dragStart = nil
+                let hitBound = wasAtBound
                 wasAtBound = false
                 withAnimation(Theme.Motion.bounce(reduceMotion: reduceMotion)) {
                     overscroll = 0
                 }
+
+                // Flick velocity → value units per second (drag left increases value).
+                let velocity = -Double(gesture.velocity.width) / Double(pointsPerUnit)
+                if !reduceMotion, !hitBound, abs(velocity) > 0.5 {
+                    startCoast(velocity: velocity)
+                } else {
+                    onCommit()
+                }
+            }
+    }
+
+    /// Decelerating momentum after a flick: steps the value each frame, ticking past detents,
+    /// until it slows below threshold, then settles on the nearest detent.
+    private func startCoast(velocity: Double) {
+        coastTask?.cancel()
+        coastTask = Task { @MainActor in
+            var speed = velocity
+            let dt = 1.0 / 60.0
+            let friction = 0.94
+            while !Task.isCancelled, abs(speed) > 0.15 {
+                let next = value + speed * dt
+                if next <= range.lowerBound || next >= range.upperBound {
+                    setValue(next)
+                    boundHits += 1            // rigid tap on hitting the edge
+                    break
+                }
+                setValue(next)                // continuous — detent crossings tick haptically
+                speed *= friction
+                try? await Task.sleep(for: .milliseconds(16))
+            }
+            if !Task.isCancelled {
+                setValue((value / detent).rounded() * detent)   // settle on a detent
                 onCommit()
             }
+        }
     }
 
     private func setValue(_ newValue: Double) {

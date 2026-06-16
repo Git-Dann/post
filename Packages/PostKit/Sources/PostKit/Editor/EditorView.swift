@@ -16,6 +16,7 @@ public struct EditorView: View {
     @State private var shareItem: ShareItem?
     @State private var isExporting = false
     @State private var isComparing = false
+    @AppStorage("soundEffectsEnabled") private var soundEnabled = false
 
     /// - Parameters:
     ///   - exporter: produces a shareable file URL for the given recipe (full-res export),
@@ -140,6 +141,7 @@ public struct EditorView: View {
                 value: dialBinding,
                 range: model.selectedTool.range,
                 detent: model.selectedTool.detent,
+                soundEnabled: soundEnabled,
                 onBegin: { model.beginInteraction() },
                 onCommit: { model.endInteraction() }
             )
