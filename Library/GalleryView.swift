@@ -33,8 +33,10 @@ struct GalleryView: View {
     @State private var showBrowser = false
     @State private var showPrimer = false
     @State private var infoSheet: InfoSheet?
+    @State private var floatIcon = false
     @AppStorage("removeLocationOnExport") private var removeLocation = false
     @AppStorage("hasPrimedPhotoAccess") private var hasPrimedPhotoAccess = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let columns = [GridItem(.adaptive(minimum: 110), spacing: Theme.Space.m)]
 
@@ -142,10 +144,19 @@ struct GalleryView: View {
                                 ProjectStore.delete(project, in: modelContext)
                             }
                         }
+                        // Subtle: cards ease in as they scroll into view.
+                        .scrollTransition { content, phase in
+                            content
+                                .opacity(reduceMotion || phase.isIdentity ? 1 : 0.55)
+                                .scaleEffect(reduceMotion || phase.isIdentity ? 1 : 0.94)
+                        }
+                        .transition(.scale(scale: 0.85).combined(with: .opacity))
                 }
             }
             .padding(.horizontal, Theme.Space.l)
             .padding(.bottom, Theme.Space.l)
+            // Springy pop when a freshly-edited photo lands in the grid.
+            .animation(reduceMotion ? .default : Theme.Motion.bounce, value: projects.count)
         }
     }
 
@@ -158,6 +169,13 @@ struct GalleryView: View {
                         .font(.system(size: 52, weight: .light))
                         .foregroundStyle(Theme.accent)
                         .symbolEffect(.breathe)
+                        .offset(y: floatIcon ? -7 : 7)            // gentle, subtle float
+                        .onAppear {
+                            guard !reduceMotion else { return }
+                            withAnimation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true)) {
+                                floatIcon = true
+                            }
+                        }
                     Text("Bring a photo to life")
                         .font(.system(.title2, design: .rounded).weight(.semibold))
                         .foregroundStyle(.primary)

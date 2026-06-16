@@ -18,8 +18,10 @@ public struct EditorView: View {
     @State private var isComparing = false
     @State private var isAdjustingDial = false
     @State private var showInfo = false
+    @State private var celebrate = false
     @Namespace private var infoGlass
     @AppStorage("soundEffectsEnabled") private var soundEnabled = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// - Parameters:
     ///   - exporter: produces a shareable file URL for the given recipe (full-res export),
@@ -118,6 +120,20 @@ public struct EditorView: View {
                 guard model.hasEdits, !showStyles, !showInfo, !isAdjustingDial else { return }
                 withAnimation(Theme.Motion.snappy) { isComparing = pressing }
                 if pressing { Haptics.impact(.soft) }
+            }
+            // Delight: a subtle glass sweep when a style is applied.
+            .shimmerSweep(token: model.activeStyle?.id)
+            // Delight: a brief sparkle when an export is ready to share/save.
+            .overlay {
+                if celebrate {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 46, weight: .semibold))
+                        .foregroundStyle(Theme.accent)
+                        .shadow(color: Theme.accent.opacity(0.6), radius: 12)
+                        .symbolEffect(.bounce, value: celebrate)
+                        .transition(.scale(scale: 0.4).combined(with: .opacity))
+                        .allowsHitTesting(false)
+                }
             }
             .overlay(alignment: .topLeading) { infoMorph }
             .overlay(alignment: .top) {
@@ -382,7 +398,21 @@ public struct EditorView: View {
         Task {
             let url = await exporter(model.state)
             isExporting = false
-            if let url { shareItem = ShareItem(url: url) }
+            if let url {
+                Haptics.notify(.success)
+                triggerCelebrate()
+                shareItem = ShareItem(url: url)
+            }
+        }
+    }
+
+    /// A brief sparkle when an export is ready — a small "ta-da" for saving/sharing a photo.
+    private func triggerCelebrate() {
+        guard !reduceMotion else { return }
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) { celebrate = true }
+        Task {
+            try? await Task.sleep(for: .milliseconds(950))
+            withAnimation(.easeOut(duration: 0.4)) { celebrate = false }
         }
     }
 
