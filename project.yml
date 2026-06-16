@@ -1,0 +1,129 @@
+name: Post
+options:
+  bundleIdPrefix: co.gitwork.post
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+    SWIFT_APPROACHABLE_CONCURRENCY: YES
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    GENERATE_INFOPLIST_FILE: YES
+    # Simulator development: ad-hoc sign, no team required.
+    CODE_SIGN_STYLE: Automatic
+    CODE_SIGN_IDENTITY: "-"
+
+packages:
+  PostKit:
+    path: Packages/PostKit
+
+targets:
+  Post:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+      - path: Library
+      - path: Intents
+    dependencies:
+      - package: PostKit
+      - target: PostShareExtension
+      - target: PostPhotosExtension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: co.gitwork.post
+        PRODUCT_NAME: Post
+        INFOPLIST_KEY_CFBundleDisplayName: Post
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: "Post saves your finished edits straight to your photo library."
+        INFOPLIST_KEY_NSCameraUsageDescription: "Snap a photo to edit right away."
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
+        INFOPLIST_KEY_UIStatusBarStyle: UIStatusBarStyleLightContent
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+
+  PostShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ShareExtension
+    dependencies:
+      - package: PostKit
+    info:
+      path: ShareExtension/Info.plist
+      properties:
+        CFBundleDisplayName: Post
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsImageWithMaxCount: 1
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: NO
+        PRODUCT_BUNDLE_IDENTIFIER: co.gitwork.post.ShareExtension
+        INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: "Post saves your edited photo to your library."
+
+  PostPhotosExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: PhotosExtension
+    dependencies:
+      - package: PostKit
+    info:
+      path: PhotosExtension/Info.plist
+      properties:
+        CFBundleDisplayName: Post
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.photo-editing
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).PhotoEditingViewController
+          NSExtensionAttributes:
+            PHSupportedMediaTypes:
+              - Image
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: NO
+        PRODUCT_BUNDLE_IDENTIFIER: co.gitwork.post.PhotosExtension
+
+  PostKitTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/PostKitTests
+    dependencies:
+      - package: PostKit
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: co.gitwork.post.PostKitTests
+
+schemes:
+  Post:
+    build:
+      targets:
+        Post: all
+        PostKitTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - PostKitTests
+  PostKitTests:
+    build:
+      targets:
+        PostKitTests: [test]
+    test:
+      config: Debug
+      targets:
+        - PostKitTests
