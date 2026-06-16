@@ -40,7 +40,7 @@ final class ShareViewController: UIViewController {
         let editor = EditorView(
             model: model,
             exporter: { [weak self] state in await self?.exportToTempFile(data: data, state: state) },
-            onDone: { [weak self] state in self?.saveAndFinish(data: data, state: state) },
+            onDone: { [weak self] state in self?.saveAndFinish(model: model, state: state) },
             onCancel: { [weak self] in self?.finish() }
         )
 
@@ -67,7 +67,15 @@ final class ShareViewController: UIViewController {
         }
     }
 
-    private func saveAndFinish(data: Data, state: EditState) {
+    private func saveAndFinish(model: EditorModel, state: EditState) {
+        guard let data = model.originalData else { finish(); return }
+        // Add it to the Post library (shared App Group store) so it shows up in the app.
+        ProjectStore.create(
+            originalData: data,
+            state: state,
+            thumbnail: model.thumbnailData(),
+            in: ProjectStore.makeContainer().mainContext
+        )
         Task {
             let exporter = ImageExporter()
             if let output = try? await exporter.export(imageData: data, state: state, format: .heic) {

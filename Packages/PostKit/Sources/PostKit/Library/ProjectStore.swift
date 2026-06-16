@@ -1,16 +1,28 @@
 import Foundation
 import SwiftData
-import PostKit
 
-/// Bridges SwiftData projects, on-disk originals, and the engine's `EditState` recipe.
+/// Bridges SwiftData projects, on-disk originals, and the engine's `EditState` recipe. Shared by
+/// the app (gallery) and the extensions (which persist new projects into the same store).
 @MainActor
-enum ProjectStore {
+public enum ProjectStore {
     private static let encoder = JSONEncoder()
     private static let decoder = JSONDecoder()
 
-    /// Persist a freshly imported image: write the original to disk and create the project record.
+    /// Builds (or opens) the shared SwiftData container in the App Group container.
+    public static func makeContainer() -> ModelContainer {
+        Storage.ensureDirectories()
+        do {
+            let config = ModelConfiguration(url: Storage.storeURL)
+            return try ModelContainer(for: Project.self, configurations: config)
+        } catch {
+            // Last-resort fallback so the app never fails to launch.
+            return try! ModelContainer(for: Project.self)
+        }
+    }
+
+    /// Persist a freshly imported/edited image: write the original to disk and create the record.
     @discardableResult
-    static func create(
+    public static func create(
         originalData: Data,
         state: EditState,
         thumbnail: Data?,
@@ -34,8 +46,7 @@ enum ProjectStore {
         return project
     }
 
-    /// Save the latest recipe and thumbnail for a project.
-    static func update(
+    public static func update(
         _ project: Project,
         state: EditState,
         thumbnail: Data?,
@@ -51,11 +62,11 @@ enum ProjectStore {
         try? context.save()
     }
 
-    static func recipe(for project: Project) -> EditState {
+    public static func recipe(for project: Project) -> EditState {
         (try? decoder.decode(EditState.self, from: project.recipeData)) ?? EditState()
     }
 
-    static func delete(_ project: Project, in context: ModelContext) {
+    public static func delete(_ project: Project, in context: ModelContext) {
         Storage.deleteOriginal(fileName: project.originalFileName)
         context.delete(project)
         try? context.save()

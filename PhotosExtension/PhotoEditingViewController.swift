@@ -85,6 +85,14 @@ final class PhotoEditingViewController: UIViewController, @preconcurrency PHCont
             return
         }
 
+        // Also add the edit to the Post library (shared App Group store).
+        ProjectStore.create(
+            originalData: data,
+            state: state,
+            thumbnail: model.thumbnailData(),
+            in: ProjectStore.makeContainer().mainContext
+        )
+
         let exporter = ImageExporter()
         if let rendered = try? await exporter.export(imageData: data, state: state, format: .jpeg) {
             try? rendered.write(to: output.renderedContentURL)

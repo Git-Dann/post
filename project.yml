@@ -36,6 +36,11 @@ targets:
       - package: PostKit
       - target: PostShareExtension
       - target: PostPhotosExtension
+    entitlements:
+      path: App/Post.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.co.gitwork.post
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: co.gitwork.post
@@ -67,6 +72,11 @@ targets:
           NSExtensionAttributes:
             NSExtensionActivationRule:
               NSExtensionActivationSupportsImageWithMaxCount: 1
+    entitlements:
+      path: ShareExtension/PostShareExtension.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.co.gitwork.post
     settings:
       base:
         GENERATE_INFOPLIST_FILE: NO
@@ -90,6 +100,11 @@ targets:
           NSExtensionAttributes:
             PHSupportedMediaTypes:
               - Image
+    entitlements:
+      path: PhotosExtension/PostPhotosExtension.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.co.gitwork.post
     settings:
       base:
         GENERATE_INFOPLIST_FILE: NO
