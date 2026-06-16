@@ -1,0 +1,3 @@
+# Apple identifiers come from the App Store Connect API key at runtime, so no
+# Apple ID / team is hard-coded here. The primary app identifier:
+app_identifier("co.gitwork.post")
