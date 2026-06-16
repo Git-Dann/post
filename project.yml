@@ -53,6 +53,7 @@ targets:
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: "Post saves your finished edits straight to your photo library."
+        INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "Allow access so you can browse and import from your photo library inside Post. Your photos are read on-device only and never leave your device."
         INFOPLIST_KEY_NSCameraUsageDescription: "Snap a photo to edit right away."
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
         INFOPLIST_KEY_UIStatusBarStyle: UIStatusBarStyleLightContent

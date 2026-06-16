@@ -30,8 +30,11 @@ struct GalleryView: View {
     @State private var session: EditorSession?
     @State private var showSettings = false
     @State private var showPicker = false
+    @State private var showBrowser = false
+    @State private var showPrimer = false
     @State private var infoSheet: InfoSheet?
     @AppStorage("removeLocationOnExport") private var removeLocation = false
+    @AppStorage("hasPrimedPhotoAccess") private var hasPrimedPhotoAccess = false
 
     private let columns = [GridItem(.adaptive(minimum: 110), spacing: Theme.Space.m)]
 
@@ -63,18 +66,45 @@ struct GalleryView: View {
         // the most private option — Post only ever sees the photos you pick. (Using `.shared()`
         // here forced the in-process picker, which needed authorization and could present black.)
         .photosPicker(isPresented: $showPicker, selection: $pickerItems, matching: .images)
+        .sheet(isPresented: $showBrowser) {
+            LibraryBrowserView { datas in createProjects(from: datas) }
+        }
+        .sheet(isPresented: $showPrimer) {
+            PhotoAccessPrimer(
+                onAllow: { Task { await PhotoLibrary.requestAccess(); finishPriming() } },
+                onSkip: { finishPriming() }
+            )
+        }
         .onChange(of: pickerItems) { _, items in
             guard !items.isEmpty else { return }
             importItems(items)
         }
         .task {
+            // First launch: offer full library access once. Skipping is fine — the picker works
+            // without it, and it can be turned on later in Settings.
+            if !hasPrimedPhotoAccess {
+                if PhotoLibrary.status == .notDetermined { showPrimer = true }
+                else { hasPrimedPhotoAccess = true }
+            }
             #if DEBUG
             let args = ProcessInfo.processInfo.arguments
             if args.contains("--seed-project"), projects.isEmpty { seedSampleProject() }
             if args.contains("--open-sample-editor") { openSample() }
             if args.contains("--open-settings") { showSettings = true }
+            if args.contains("--open-browser") { showBrowser = true }
             #endif
         }
+    }
+
+    /// Tapping "+" or the empty-state: browse the library in-app when access is granted, otherwise
+    /// fall back to the permission-free system picker.
+    private func importTapped() {
+        if PhotoLibrary.hasAccess { showBrowser = true } else { showPicker = true }
+    }
+
+    private func finishPriming() {
+        hasPrimedPhotoAccess = true
+        showPrimer = false
     }
 
     // MARK: Header & title
@@ -83,7 +113,7 @@ struct GalleryView: View {
         HStack {
             GlassIconButton("gearshape") { showSettings = true }
             Spacer()
-            GlassIconButton("plus", prominent: true) { showPicker = true }
+            GlassIconButton("plus", prominent: true) { importTapped() }
         }
         .padding(.horizontal, Theme.Space.l)
         .padding(.top, Theme.Space.s)
@@ -122,7 +152,7 @@ struct GalleryView: View {
     private var emptyState: some View {
         VStack {
             Spacer()
-            Button { showPicker = true } label: {
+            Button { importTapped() } label: {
                 VStack(spacing: Theme.Space.m) {
                     Image(systemName: "photo.on.rectangle.angled")
                         .font(.system(size: 52, weight: .light))
@@ -147,21 +177,29 @@ struct GalleryView: View {
     private func importItems(_ items: [PhotosPickerItem]) {
         Task {
             defer { pickerItems = [] }
-            var created: [(EditorModel, Project)] = []
+            var datas: [Data] = []
             for item in items {
-                guard let data = try? await item.loadTransferable(type: Data.self),
-                      let loaded = ImageLoader.makeLoaded(from: data) else { continue }
-                let model = EditorModel(source: loaded.preview, originalData: data, previewScale: loaded.previewScale)
-                if let project = ProjectStore.create(
-                    originalData: data, state: model.state, thumbnail: model.thumbnailData(), in: modelContext
-                ) {
-                    created.append((model, project))
-                }
+                if let data = try? await item.loadTransferable(type: Data.self) { datas.append(data) }
             }
-            // Open the editor only when a single photo was imported; bulk imports just populate the grid.
-            if created.count == 1, let (model, project) = created.first {
-                session = EditorSession(model: model, project: project)
+            createProjects(from: datas)
+        }
+    }
+
+    /// Turn imported image data (from the picker or the in-app browser) into projects. Opens the
+    /// editor when exactly one photo came in; bulk imports just populate the grid.
+    private func createProjects(from datas: [Data]) {
+        var created: [(EditorModel, Project)] = []
+        for data in datas {
+            guard let loaded = ImageLoader.makeLoaded(from: data) else { continue }
+            let model = EditorModel(source: loaded.preview, originalData: data, previewScale: loaded.previewScale)
+            if let project = ProjectStore.create(
+                originalData: data, state: model.state, thumbnail: model.thumbnailData(), in: modelContext
+            ) {
+                created.append((model, project))
             }
+        }
+        if created.count == 1, let (model, project) = created.first {
+            session = EditorSession(model: model, project: project)
         }
     }
 
