@@ -25,11 +25,11 @@ public struct MetalImageView: UIViewRepresentable {
         view.delegate = context.coordinator
         view.framebufferOnly = false                 // CIContext must WRITE the drawable texture
         view.colorPixelFormat = .rgba16Float          // wide-gamut, no banding on fades/grain
-        // Free-running so the preview reflects every edit instantly during a drag (the draw loop
-        // pulls the latest image each frame) rather than only updating when the gesture ends.
-        view.isPaused = false
+        // We drive drawing ourselves with a CADisplayLink in `.common` run-loop modes (see the
+        // coordinator) so the preview keeps rendering DURING a dial drag — MTKView's own display
+        // link doesn't fire while UIKit is in gesture-tracking mode, which froze live updates.
+        view.isPaused = true
         view.enableSetNeedsDisplay = false
-        view.preferredFramesPerSecond = 60
         view.isOpaque = true
         view.clearColor = MTLClearColor(red: 0.05, green: 0.05, blue: 0.06, alpha: 1)
         view.backgroundColor = .clear
@@ -37,11 +37,17 @@ public struct MetalImageView: UIViewRepresentable {
             layer.colorspace = CGColorSpace(name: CGColorSpace.displayP3)
         }
         context.coordinator.provider = provider
+        context.coordinator.startRendering(into: view)
         return view
     }
 
     public func updateUIView(_ view: MTKView, context: Context) {
         context.coordinator.provider = provider
+        view.draw()   // render immediately on any SwiftUI update, in addition to the display link
+    }
+
+    public static func dismantleUIView(_ view: MTKView, coordinator: Renderer) {
+        coordinator.stopRendering()
     }
 
     /// MTKView delegate + Core Image renderer. Plain (non-isolated) class; all delegate calls
@@ -54,6 +60,29 @@ public struct MetalImageView: UIViewRepresentable {
 
         /// Set on the main thread from `updateUIView`; invoked each frame on the main thread in `draw`.
         var provider: (@MainActor () -> CIImage?)?
+
+        private weak var view: MTKView?
+        private var displayLink: CADisplayLink?
+
+        /// Drive `draw()` every frame via a CADisplayLink in `.common` modes — crucially, `.common`
+        /// includes `UITrackingRunLoopMode`, so frames keep coming while a dial is being dragged.
+        func startRendering(into view: MTKView) {
+            self.view = view
+            let link = CADisplayLink(target: self, selector: #selector(step))
+            link.add(to: .main, forMode: .common)
+            displayLink = link
+        }
+
+        func stopRendering() {
+            displayLink?.invalidate()
+            displayLink = nil
+            view = nil
+        }
+
+        @objc private func step() {
+            // The link is added to the main run loop, so we're on the main thread here.
+            MainActor.assumeIsolated { view?.draw() }
+        }
 
         override init() {
             guard let device = MTLCreateSystemDefaultDevice(),
