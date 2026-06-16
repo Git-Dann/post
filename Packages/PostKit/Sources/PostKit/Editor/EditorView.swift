@@ -16,6 +16,7 @@ public struct EditorView: View {
     @State private var shareItem: ShareItem?
     @State private var isExporting = false
     @State private var isComparing = false
+    @State private var isAdjustingDial = false
     @State private var showInfo = false
     @Namespace private var infoGlass
     @AppStorage("soundEffectsEnabled") private var soundEnabled = false
@@ -67,7 +68,6 @@ public struct EditorView: View {
         }
         .animation(Theme.Motion.settle, value: model.isCropping)
         .animation(Theme.Motion.settle, value: showStyles)
-        .animation(.default, value: showInfo)
         .statusBarHidden()
         .sheet(item: $shareItem) { item in ActivityView(items: [item.url]) }
         .task {
@@ -118,6 +118,16 @@ public struct EditorView: View {
 
     private var framedImage: some View {
         MetalImageView(image: isComparing ? model.source : model.displayImage)
+            // Press and hold the image to compare against the original. Attached to the image itself,
+            // BELOW the controls overlay, so it never competes with the dial drag — that competition
+            // was hijacking the touch and pinning the preview to the original mid-drag (the cause of
+            // "no live preview"). The `!isAdjustingDial` guard is a second line of defence.
+            .onLongPressGesture(minimumDuration: 0.18, maximumDistance: 60) {
+            } onPressingChanged: { pressing in
+                guard model.hasEdits, !showStyles, !showInfo, !isAdjustingDial else { return }
+                withAnimation(Theme.Motion.snappy) { isComparing = pressing }
+                if pressing { Haptics.impact(.soft) }
+            }
             .overlay(alignment: .topLeading) { infoMorph }
             .overlay(alignment: .top) {
                 if isComparing && !showInfo {
@@ -132,13 +142,6 @@ public struct EditorView: View {
                 RoundedRectangle(cornerRadius: Theme.Radius.image, style: .continuous)
                     .strokeBorder(.white.opacity(0.08), lineWidth: 1)
             )
-            // Press and hold the image to compare against the original.
-            .onLongPressGesture(minimumDuration: 0.18, maximumDistance: 60) {
-            } onPressingChanged: { pressing in
-                guard model.hasEdits, !showStyles, !showInfo else { return }
-                withAnimation(Theme.Motion.snappy) { isComparing = pressing }
-                if pressing { Haptics.impact(.soft) }
-            }
     }
 
     /// The (i) button that morphs (Liquid Glass) into the metadata panel and back. Same
@@ -234,8 +237,8 @@ public struct EditorView: View {
                     range: model.selectedTool.range,
                     detent: model.selectedTool.detent,
                     soundEnabled: soundEnabled,
-                    onBegin: { model.beginInteraction() },
-                    onCommit: { model.endInteraction() }
+                    onBegin: { isAdjustingDial = true; isComparing = false; model.beginInteraction() },
+                    onCommit: { isAdjustingDial = false; model.endInteraction() }
                 )
                 .padding(.horizontal, Theme.Space.l)
             }
