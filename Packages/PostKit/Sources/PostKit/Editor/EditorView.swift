@@ -54,7 +54,7 @@ public struct EditorView: View {
 
                 if showsChrome && !model.isCropping {
                     toolStrip
-                    doneButton
+                    actionBar
                         .padding(.bottom, Theme.Space.s)
                 }
             }
@@ -66,20 +66,20 @@ public struct EditorView: View {
         }
         .animation(Theme.Motion.settle, value: model.isCropping)
         .animation(Theme.Motion.settle, value: showStyles)
+        .animation(Theme.Motion.settle, value: showInfo)
         .statusBarHidden()
         .sheet(item: $shareItem) { item in ActivityView(items: [item.url]) }
-        .sheet(isPresented: $showInfo) {
-            MetadataView(rows: model.originalData.map { ImageLoader.metadata(from: $0) } ?? [])
-        }
         .task {
             await styleProvider.loadIfNeeded()
             #if DEBUG
             let args = ProcessInfo.processInfo.arguments
             if args.contains("--show-styles") { showStyles = true }
             if args.contains("--demo-edit") {
+                model.selectedTool = .contrast
                 model.update(.contrast, to: 0.5)
                 model.update(.saturation, to: -0.4)
             }
+            if args.contains("--show-info") { showInfo = true }
             #endif
         }
     }
@@ -88,9 +88,15 @@ public struct EditorView: View {
 
     private var framedImage: some View {
         MetalImageView(image: isComparing ? model.source : model.displayImage)
-            .overlay(alignment: .topLeading) { infoButton }
+            .overlay(alignment: .topLeading) {
+                if !showInfo { infoButton }
+            }
             .overlay(alignment: .top) {
-                if isComparing {
+                if showInfo {
+                    metadataPanel
+                        .padding(Theme.Space.m)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                } else if isComparing {
                     GlassPill("Original")
                         .padding(.top, Theme.Space.m)
                         .transition(.opacity.combined(with: .scale))
@@ -105,17 +111,49 @@ public struct EditorView: View {
             // Press and hold the image to compare against the original.
             .onLongPressGesture(minimumDuration: 0.18, maximumDistance: 60) {
             } onPressingChanged: { pressing in
-                guard model.hasEdits, !showStyles else { return }
+                guard model.hasEdits, !showStyles, !showInfo else { return }
                 withAnimation(Theme.Motion.snappy) { isComparing = pressing }
                 if pressing { Haptics.impact(.soft) }
             }
     }
 
     private var infoButton: some View {
-        GlassIconButton("info", size: 38) { showInfo = true }
-            .disabled(model.originalData == nil)
-            .opacity(model.originalData == nil ? 0.35 : 1)
-            .padding(Theme.Space.m)
+        GlassIconButton("info", size: 38) {
+            withAnimation(Theme.Motion.settle) { showInfo = true }
+        }
+        .disabled(model.originalData == nil)
+        .opacity(model.originalData == nil ? 0.35 : 1)
+        .padding(Theme.Space.m)
+    }
+
+    /// Inline, top-level metadata panel inside the image (format, size, dimensions, date).
+    private var metadataPanel: some View {
+        let rows = model.originalData.map { ImageLoader.topLevelMetadata(from: $0) } ?? []
+        return VStack(alignment: .leading, spacing: Theme.Space.s) {
+            HStack {
+                GlassIconButton("xmark", size: 34) {
+                    withAnimation(Theme.Motion.settle) { showInfo = false }
+                }
+                Spacer()
+            }
+            if rows.isEmpty {
+                Text("No info available")
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.7))
+            } else {
+                ForEach(rows) { row in
+                    HStack {
+                        Text(row.label).foregroundStyle(.white.opacity(0.7))
+                        Spacer()
+                        Text(row.value).fontWeight(.medium).foregroundStyle(.white)
+                    }
+                    .font(.subheadline)
+                }
+            }
+        }
+        .padding(Theme.Space.l)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassEffect(in: .rect(cornerRadius: Theme.Radius.card))
     }
 
     /// The dial (or styles strip) that lives inside the bottom of the image, over a scrim.
@@ -147,29 +185,26 @@ public struct EditorView: View {
             LinearGradient(colors: [.clear, .black.opacity(0.65)], startPoint: .top, endPoint: .bottom)
                 .allowsHitTesting(false)
         )
-        .overlay(alignment: .bottomTrailing) { resetButton }
     }
 
-    /// Small X, bottom-right inside the image: clears the current tool's edit (or closes styles).
+    /// The X beside Done: clears the current tool's edit, or closes the styles strip. Hidden when
+    /// there's nothing to clear.
     @ViewBuilder
     private var resetButton: some View {
         if showStyles {
-            smallX { withAnimation(Theme.Motion.settle) { showStyles = false } }
+            GlassIconButton("xmark") {
+                withAnimation(Theme.Motion.settle) { showStyles = false }
+            }
+            .transition(.scale.combined(with: .opacity))
         } else if model.value(of: model.selectedTool) != 0 {
-            smallX {
+            GlassIconButton("xmark") {
                 model.beginInteraction()
                 model.update(model.selectedTool, to: 0)
                 model.endInteraction()
                 Haptics.impact(.rigid)
             }
-        }
-    }
-
-    private func smallX(_ action: @escaping () -> Void) -> some View {
-        GlassIconButton("xmark", size: 34, action: action)
-            .padding(.trailing, Theme.Space.m)
-            .padding(.bottom, Theme.Space.m)
             .transition(.scale.combined(with: .opacity))
+        }
     }
 
     // MARK: Top bar (on the canvas, above the image)
@@ -217,7 +252,7 @@ public struct EditorView: View {
         }
     }
 
-    private var doneButton: some View {
+    private var actionBar: some View {
         Button { onDone(model.state) } label: {
             Text("Done")
                 .font(.system(.headline, design: .rounded))
@@ -227,6 +262,9 @@ public struct EditorView: View {
         .buttonStyle(.glassProminent)
         .tint(.white)
         .foregroundStyle(.black)
+        .frame(maxWidth: .infinity)
+        .overlay(alignment: .trailing) { resetButton }
+        .padding(.horizontal, Theme.Space.l)
     }
 
     private var readout: some View {

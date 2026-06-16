@@ -114,6 +114,12 @@ public enum ImageLoader {
         return rows
     }
 
+    /// A short, top-level summary for the inline info panel (format, size, dimensions, date).
+    public static nonisolated func topLevelMetadata(from data: Data) -> [MetaRow] {
+        let wanted: Set<String> = ["Format", "Dimensions", "File size", "Captured"]
+        return metadata(from: data).filter { wanted.contains($0.label) }
+    }
+
     private static nonisolated func byteSize(_ bytes: Int) -> String {
         let formatter = ByteCountFormatter()
         formatter.countStyle = .file
