@@ -33,10 +33,21 @@ ctx.drawRadialGradient(radial,
     endCenter: CGPoint(x: size * 7 / 10, y: size * 7 / 10), endRadius: CGFloat(size) * 0.55,
     options: [])
 
-// White 8-point sparkle star, centered.
+// Subtle corner vignette for depth.
+let vignette = [
+    CGColor(srgbRed: 0.4, green: 0.18, blue: 0.02, alpha: 0),
+    CGColor(srgbRed: 0.4, green: 0.18, blue: 0.02, alpha: 0.28)
+] as CFArray
+let vignetteGradient = CGGradient(colorsSpace: cs, colors: vignette, locations: [0.55, 1])!
+ctx.drawRadialGradient(vignetteGradient,
+    startCenter: CGPoint(x: size / 2, y: size / 2), startRadius: 0,
+    endCenter: CGPoint(x: size / 2, y: size / 2), endRadius: CGFloat(size) * 0.72,
+    options: [])
+
+// 8-point sparkle star, centered.
 let center = CGPoint(x: size / 2, y: size / 2)
 let outer = CGFloat(size) * 0.34
-let inner = CGFloat(size) * 0.13
+let inner = CGFloat(size) * 0.135
 let points = 8
 let path = CGMutablePath()
 for i in 0..<(points * 2) {
@@ -47,11 +58,29 @@ for i in 0..<(points * 2) {
 }
 path.closeSubpath()
 
-ctx.setShadow(offset: CGSize(width: 0, height: -10), blur: 40,
-              color: CGColor(srgbRed: 0.5, green: 0.2, blue: 0, alpha: 0.35))
+// Drop shadow under the star.
+ctx.saveGState()
+ctx.setShadow(offset: CGSize(width: 0, height: -10), blur: 44,
+              color: CGColor(srgbRed: 0.45, green: 0.18, blue: 0, alpha: 0.4))
 ctx.setFillColor(CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1))
 ctx.addPath(path)
 ctx.fillPath()
+ctx.restoreGState()
+
+// Re-fill with a soft top-down gradient (bright white → warm cream) for dimensionality.
+ctx.saveGState()
+ctx.addPath(path)
+ctx.clip()
+let starFill = [
+    CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1),
+    CGColor(srgbRed: 1, green: 0.95, blue: 0.86, alpha: 1)
+] as CFArray
+let starGradient = CGGradient(colorsSpace: cs, colors: starFill, locations: [0, 1])!
+ctx.drawLinearGradient(starGradient,
+    start: CGPoint(x: center.x, y: center.y + outer),
+    end: CGPoint(x: center.x, y: center.y - outer),
+    options: [])
+ctx.restoreGState()
 
 guard let image = ctx.makeImage() else { fatalError("image") }
 let outURL = URL(fileURLWithPath: "App/Assets.xcassets/AppIcon.appiconset/icon-1024.png")
