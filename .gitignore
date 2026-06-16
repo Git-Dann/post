@@ -14,3 +14,10 @@ Post.xcodeproj/
 
 # Local screenshots / scratch artifacts
 .build-artifacts/
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/test_output/
+*.ipa
+*.dSYM.zip

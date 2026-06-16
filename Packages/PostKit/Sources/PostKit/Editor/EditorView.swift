@@ -321,7 +321,8 @@ public struct EditorView: View {
                     model.isCropping = true
                 }
             ],
-            selected: model.selectedTool,
+            // No dial tool is highlighted while Styles owns the editor — only one tool reads active.
+            selected: showStyles ? nil : model.selectedTool,
             editedTools: editedTools
         ) { tool in
             withAnimation(Theme.Motion.snappy) {

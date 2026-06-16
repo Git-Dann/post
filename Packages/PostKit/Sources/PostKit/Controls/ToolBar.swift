@@ -25,14 +25,16 @@ public struct ToolBarAction: Identifiable {
 /// edit show a small accent dot.
 public struct ToolBar: View {
     private let actions: [ToolBarAction]
-    private let selected: EditTool
+    private let selected: EditTool?
     private let tools: [EditTool]
     private let editedTools: Set<EditTool>
     private let onSelect: (EditTool) -> Void
 
+    /// - Parameter selected: the active dial tool, or `nil` when another mode (Styles, Crop) owns the
+    ///   editor — in which case no dial chip is highlighted, so only one tool reads as active.
     public init(
         actions: [ToolBarAction] = [],
-        selected: EditTool,
+        selected: EditTool?,
         tools: [EditTool] = EditTool.dialTools,
         editedTools: Set<EditTool> = [],
         onSelect: @escaping (EditTool) -> Void
