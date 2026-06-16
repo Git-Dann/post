@@ -27,8 +27,6 @@ public struct ToolBar: View {
     private let tools: [EditTool]
     private let onSelect: (EditTool) -> Void
 
-    @Namespace private var glass
-
     public init(
         actions: [ToolBarAction] = [],
         selected: EditTool,
@@ -42,33 +40,29 @@ public struct ToolBar: View {
     }
 
     public var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                GlassEffectContainer(spacing: Theme.Space.m) {
-                    HStack(spacing: Theme.Space.m) {
-                        ForEach(actions) { action in
-                            actionChip(action)
-                        }
-                        if !actions.isEmpty {
-                            Divider()
-                                .frame(height: 32)
-                                .overlay(.white.opacity(0.15))
-                        }
-                        ForEach(tools) { tool in
-                            chip(tool).id(tool)
-                        }
+        ScrollView(.horizontal, showsIndicators: false) {
+            GlassEffectContainer(spacing: Theme.Space.m) {
+                HStack(spacing: Theme.Space.m) {
+                    ForEach(actions) { action in
+                        actionChip(action)
                     }
-                    .padding(.horizontal, Theme.Space.l)
-                    // Room so the selected chip's 1.12× scale and the glass halo aren't clipped.
-                    .padding(.vertical, 10)
+                    if !actions.isEmpty {
+                        Divider()
+                            .frame(height: 32)
+                            .overlay(.white.opacity(0.15))
+                    }
+                    ForEach(tools) { tool in
+                        chip(tool)
+                    }
                 }
-            }
-            // Don't let the scroll view crop the scaled/raised chips top & bottom.
-            .scrollClipDisabled()
-            .onChange(of: selected) { _, tool in
-                withAnimation(Theme.Motion.snappy) { proxy.scrollTo(tool, anchor: .center) }
+                .padding(.horizontal, Theme.Space.l)
+                // Room so the selected chip's 1.12× scale and the glass halo aren't clipped.
+                .padding(.vertical, 10)
             }
         }
+        // Don't let the scroll view crop the scaled/raised chips top & bottom.
+        // (No auto-scroll on selection — the row stays put so chips don't jump.)
+        .scrollClipDisabled()
     }
 
     private func actionChip(_ action: ToolBarAction) -> some View {
@@ -104,7 +98,6 @@ public struct ToolBar: View {
             isSelected ? .regular.tint(Theme.accent.opacity(0.78)).interactive() : .regular.interactive(),
             in: .circle
         )
-        .glassEffectID(tool, in: glass)
         .scaleEffect(isSelected ? 1.12 : 1)
         .animation(Theme.Motion.snappy, value: isSelected)
         .accessibilityLabel(tool.title)

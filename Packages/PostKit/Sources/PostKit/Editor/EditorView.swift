@@ -45,26 +45,16 @@ public struct EditorView: View {
     public var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            MetalImageView(image: isComparing ? model.source : model.displayImage)
-                .ignoresSafeArea()
-                .overlay(alignment: .top) {
-                    if isComparing {
-                        GlassPill("Original")
-                            .padding(.top, 80)
-                            .transition(.opacity.combined(with: .scale))
-                    }
-                }
-                // Press and hold anywhere on the image to compare against the original.
-                .onLongPressGesture(minimumDuration: 0.18, maximumDistance: 60) {
-                } onPressingChanged: { pressing in
-                    guard model.hasEdits else { return }
-                    withAnimation(Theme.Motion.snappy) { isComparing = pressing }
-                    if pressing { Haptics.impact(.soft) }
-                }
 
             VStack(spacing: 0) {
                 if showsChrome { topBar }
-                Spacer(minLength: 0)
+
+                // The image as a framed, rounded card on the black canvas — never full-bleed.
+                framedImage
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.horizontal, Theme.Space.m)
+                    .padding(.vertical, Theme.Space.s)
+
                 if !model.isCropping {
                     if showStyles {
                         stylePanel
@@ -92,6 +82,31 @@ public struct EditorView: View {
             }
             #endif
         }
+    }
+
+    // MARK: Framed image
+
+    private var framedImage: some View {
+        MetalImageView(image: isComparing ? model.source : model.displayImage)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.image, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.Radius.image, style: .continuous)
+                    .strokeBorder(.white.opacity(0.06), lineWidth: 1)
+            )
+            .overlay(alignment: .top) {
+                if isComparing {
+                    GlassPill("Original")
+                        .padding(.top, Theme.Space.m)
+                        .transition(.opacity.combined(with: .scale))
+                }
+            }
+            // Press and hold the image to compare against the original.
+            .onLongPressGesture(minimumDuration: 0.18, maximumDistance: 60) {
+            } onPressingChanged: { pressing in
+                guard model.hasEdits else { return }
+                withAnimation(Theme.Motion.snappy) { isComparing = pressing }
+                if pressing { Haptics.impact(.soft) }
+            }
     }
 
     // MARK: Top bar
@@ -155,7 +170,7 @@ public struct EditorView: View {
 
             ToolBar(
                 actions: [
-                    ToolBarAction(id: "styles", title: "Styles", systemImage: "wand.and.stars", tinted: true) {
+                    ToolBarAction(id: "styles", title: "Styles", systemImage: "wand.and.stars", tinted: showStyles) {
                         withAnimation(Theme.Motion.settle) { showStyles = true }
                     },
                     ToolBarAction(id: "crop", title: "Crop & Rotate", systemImage: "crop.rotate") {
