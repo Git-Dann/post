@@ -1,12 +1,15 @@
 import SwiftUI
+import Photos
+import UIKit
 import PostKit
 
-/// Settings & about. Doubles as the privacy statement — the app's whole pitch — plus the one
-/// export option that touches privacy: stripping location from shared images.
+/// Settings & about. Doubles as the privacy statement — the app's whole pitch — plus export and
+/// photo-access controls.
 struct SettingsView: View {
     @AppStorage("removeLocationOnExport") private var removeLocation = false
     @AppStorage("soundEffectsEnabled") private var soundEnabled = false
     @AppStorage(AccentChoice.storageKey) private var accentRaw = AccentChoice.amber.rawValue
+    @State private var photoStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
     @Environment(\.dismiss) private var dismiss
 
     private var version: String {
@@ -22,6 +25,7 @@ struct SettingsView: View {
                     VStack(spacing: Theme.Space.l) {
                         promise
                         appearance
+                        photoAccess
                         exportOptions
                         Text(version)
                             .font(.footnote)
@@ -33,6 +37,7 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear { photoStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite) }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
@@ -100,6 +105,59 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Theme.Space.l)
         .glassEffect(in: .rect(cornerRadius: Theme.Radius.card))
+    }
+
+    private var photoAccess: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            HStack(spacing: Theme.Space.m) {
+                Image(systemName: "photo.stack")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Theme.accent)
+                    .frame(width: 26)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Photo library access")
+                        .font(.subheadline.weight(.medium))
+                    Text(photoStatusText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            Button(action: handlePhotoAccess) {
+                Text(photoButtonLabel)
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, Theme.Space.s)
+            }
+            .buttonStyle(.glassProminent)
+            .tint(Theme.accent)
+            .foregroundStyle(.black)
+        }
+        .padding(Theme.Space.l)
+        .glassEffect(in: .rect(cornerRadius: Theme.Radius.card))
+    }
+
+    private var photoStatusText: String {
+        switch photoStatus {
+        case .authorized: "Full access — import anything"
+        case .limited: "Limited to selected photos"
+        case .denied: "No access — picker only"
+        case .restricted: "Restricted by device settings"
+        case .notDetermined: "Using the picker (no access needed)"
+        @unknown default: "Unknown"
+        }
+    }
+
+    private var photoButtonLabel: String {
+        photoStatus == .notDetermined ? "Allow Full Access" : "Manage in Settings"
+    }
+
+    private func handlePhotoAccess() {
+        if photoStatus == .notDetermined {
+            Task { photoStatus = await PHPhotoLibrary.requestAuthorization(for: .readWrite) }
+        } else if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
+        }
     }
 
     private var exportOptions: some View {

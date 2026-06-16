@@ -17,6 +17,7 @@ public struct EditorView: View {
     @State private var isExporting = false
     @State private var isComparing = false
     @State private var showInfo = false
+    @Namespace private var infoGlass
     @AppStorage("soundEffectsEnabled") private var soundEnabled = false
 
     /// - Parameters:
@@ -88,15 +89,9 @@ public struct EditorView: View {
 
     private var framedImage: some View {
         MetalImageView(image: isComparing ? model.source : model.displayImage)
-            .overlay(alignment: .topLeading) {
-                if !showInfo { infoButton }
-            }
+            .overlay(alignment: .topLeading) { infoMorph }
             .overlay(alignment: .top) {
-                if showInfo {
-                    metadataPanel
-                        .padding(Theme.Space.m)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                } else if isComparing {
+                if isComparing && !showInfo {
                     GlassPill("Original")
                         .padding(.top, Theme.Space.m)
                         .transition(.opacity.combined(with: .scale))
@@ -117,23 +112,49 @@ public struct EditorView: View {
             }
     }
 
-    private var infoButton: some View {
-        GlassIconButton("info", size: 38) {
-            withAnimation(Theme.Motion.settle) { showInfo = true }
+    /// The (i) button that morphs (Liquid Glass) into the metadata panel and back. Same
+    /// `glassEffectID` on both states inside a `GlassEffectContainer` does the morph; the X ends up
+    /// sitting where the (i) was.
+    private var infoMorph: some View {
+        GlassEffectContainer {
+            Group {
+                if showInfo {
+                    metadataPanelContent
+                        .glassEffect(in: .rect(cornerRadius: Theme.Radius.card))
+                        .glassEffectID("info", in: infoGlass)
+                } else {
+                    Button {
+                        withAnimation(Theme.Motion.settle) { showInfo = true }
+                    } label: {
+                        Color.clear
+                            .frame(width: 38, height: 38)
+                            .overlay(Image(systemName: "info").font(.system(size: 16, weight: .semibold)))
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .glassEffect(.regular.interactive(), in: .circle)
+                    .glassEffectID("info", in: infoGlass)
+                }
+            }
         }
-        .disabled(model.originalData == nil)
-        .opacity(model.originalData == nil ? 0.35 : 1)
         .padding(Theme.Space.m)
     }
 
-    /// Inline, top-level metadata panel inside the image (format, size, dimensions, date).
-    private var metadataPanel: some View {
+    /// Inline, top-level metadata (format, size, dimensions, date). The X sits top-left, over where
+    /// the (i) was.
+    private var metadataPanelContent: some View {
         let rows = model.originalData.map { ImageLoader.topLevelMetadata(from: $0) } ?? []
         return VStack(alignment: .leading, spacing: Theme.Space.s) {
             HStack {
-                GlassIconButton("xmark", size: 34) {
+                Button {
                     withAnimation(Theme.Motion.settle) { showInfo = false }
+                } label: {
+                    Color.clear
+                        .frame(width: 30, height: 30)
+                        .overlay(Image(systemName: "xmark").font(.system(size: 14, weight: .bold)))
+                        .contentShape(Circle())
                 }
+                .buttonStyle(.plain)
                 Spacer()
             }
             if rows.isEmpty {
@@ -152,8 +173,7 @@ public struct EditorView: View {
             }
         }
         .padding(Theme.Space.l)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(in: .rect(cornerRadius: Theme.Radius.card))
+        .frame(width: 280, alignment: .leading)
     }
 
     /// The dial (or styles strip) that lives inside the bottom of the image, over a scrim.
