@@ -46,24 +46,22 @@ public struct ToolBar: View {
 
     public var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            GlassEffectContainer(spacing: Theme.Space.m) {
-                HStack(spacing: Theme.Space.m) {
-                    ForEach(actions) { action in
-                        actionChip(action)
-                    }
-                    if !actions.isEmpty {
-                        Divider()
-                            .frame(height: 32)
-                            .overlay(.white.opacity(0.15))
-                    }
-                    ForEach(tools) { tool in
-                        chip(tool)
-                    }
+            HStack(spacing: Theme.Space.m) {
+                ForEach(actions) { action in
+                    actionChip(action)
                 }
-                .padding(.horizontal, Theme.Space.l)
-                // Room so the selected chip's 1.12× scale, the dot, and the glass halo aren't clipped.
-                .padding(.vertical, 10)
+                if !actions.isEmpty {
+                    Divider()
+                        .frame(height: 32)
+                        .overlay(.white.opacity(0.15))
+                }
+                ForEach(tools) { tool in
+                    chip(tool)
+                }
             }
+            .padding(.horizontal, Theme.Space.l)
+            // Room so the selected chip's 1.12× scale, the dot, and the glass halo aren't clipped.
+            .padding(.vertical, 10)
         }
         // Don't let the scroll view crop the scaled/raised chips top & bottom.
         // (No auto-scroll on selection — the row stays put so chips don't jump.)
