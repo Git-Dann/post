@@ -1,10 +1,12 @@
 name: TestFlight
 
-# Trigger a beta build manually, or automatically on every push to main.
+# Manual trigger only for now. Once the App Store Connect API-key secrets are
+# in place (see below) and a runner with Xcode 27 is available, add an
+# automatic trigger by uncommenting the `push` block:
+#   push:
+#     branches: [main]
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
 
 concurrency:
   group: testflight-${{ github.ref }}
