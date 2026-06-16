@@ -81,6 +81,13 @@ public struct EditorView: View {
                 model.update(.saturation, to: -0.4)
             }
             if args.contains("--show-info") { showInfo = true }
+            if args.contains("--demo-style") {
+                showStyles = true
+                if let style = styleProvider.styles.first(where: { $0.id == "film" }) {
+                    model.applyStyle(style)
+                    model.setStyleIntensity(0.75)
+                }
+            }
             #endif
         }
     }
@@ -180,11 +187,24 @@ public struct EditorView: View {
     private var imageControls: some View {
         VStack(spacing: Theme.Space.s) {
             if showStyles {
-                StyleStrip(source: model.source, styles: styleProvider.styles) { style in
-                    model.applyRecipe(style.recipe)
-                    withAnimation(Theme.Motion.settle) { showStyles = false }
+                if model.hasActiveStyle {
+                    // Selected style: the dial now controls the style's intensity.
+                    styleReadout
+                    HapticDial(
+                        value: styleIntensityBinding,
+                        range: 0...1,
+                        detent: 0.025,
+                        soundEnabled: soundEnabled,
+                        onBegin: { model.beginInteraction() },
+                        onCommit: { model.endInteraction() }
+                    )
+                    .padding(.horizontal, Theme.Space.l)
+                } else {
+                    StyleStrip(source: model.source, styles: styleProvider.styles) { style in
+                        withAnimation(Theme.Motion.settle) { model.applyStyle(style) }
+                    }
+                    .padding(.bottom, Theme.Space.s)
                 }
-                .padding(.bottom, Theme.Space.s)
             } else {
                 readout
                 HapticDial(
@@ -207,11 +227,17 @@ public struct EditorView: View {
         )
     }
 
-    /// The X beside Done: clears the current tool's edit, or closes the styles strip. Hidden when
-    /// there's nothing to clear.
+    /// The X beside Done: dismisses the active style (→ carousel), closes the styles strip, or
+    /// clears the current tool's edit. Hidden when there's nothing to clear.
     @ViewBuilder
     private var resetButton: some View {
-        if showStyles {
+        if showStyles && model.hasActiveStyle {
+            GlassIconButton("xmark") {
+                withAnimation(Theme.Motion.settle) { model.dismissStyle() }
+                Haptics.impact(.rigid)
+            }
+            .transition(.scale.combined(with: .opacity))
+        } else if showStyles {
             GlassIconButton("xmark") {
                 withAnimation(Theme.Motion.settle) { showStyles = false }
             }
@@ -225,6 +251,25 @@ public struct EditorView: View {
             }
             .transition(.scale.combined(with: .opacity))
         }
+    }
+
+    private var styleReadout: some View {
+        VStack(spacing: 2) {
+            Text("\(Int((model.styleIntensity * 100).rounded()))%")
+                .font(.system(size: 30, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .contentTransition(.numericText())
+                .foregroundStyle(.white)
+            Text(model.activeStyle?.name ?? "Style")
+                .font(.system(.subheadline, design: .rounded))
+                .foregroundStyle(.white.opacity(0.7))
+        }
+        .shadow(color: .black.opacity(0.4), radius: 4)
+        .animation(Theme.Motion.snappy, value: model.styleIntensity)
+    }
+
+    private var styleIntensityBinding: Binding<Double> {
+        Binding(get: { model.styleIntensity }, set: { model.setStyleIntensity($0) })
     }
 
     // MARK: Top bar (on the canvas, above the image)
@@ -266,6 +311,8 @@ public struct EditorView: View {
             editedTools: editedTools
         ) { tool in
             withAnimation(Theme.Motion.snappy) {
+                // Reaching for a tool turns the active style into the manual starting point.
+                if model.hasActiveStyle { model.bakeStyle() }
                 showStyles = false
                 model.selectedTool = tool
             }

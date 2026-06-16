@@ -107,30 +107,26 @@ public enum FilterPipeline {
         guard !extent.isInfinite, !extent.isNull, !extent.isEmpty,
               let raw = CIFilter.randomGenerator().outputImage else { return base }
 
-        // Generate at the image's native resolution — never upscale (that's what made grain
-        // look blocky/pixelated). CIRandomGenerator is deterministic, so the grain is stable.
-        let cropped = raw.cropped(to: extent)
-
-        // Luminance → all RGB channels, opaque.
+        // Fine monochrome film grain. CIRandomGenerator is deterministic, so it's stable.
         let mono = CIFilter.colorMatrix()
-        mono.inputImage = cropped
+        mono.inputImage = raw
         let luma = CIVector(x: 0.2126, y: 0.7152, z: 0.0722, w: 0)
         mono.rVector = luma
         mono.gVector = luma
         mono.bVector = luma
         mono.aVector = CIVector(x: 0, y: 0, z: 0, w: 0)
         mono.biasVector = CIVector(x: 0, y: 0, z: 0, w: 1)
-        var noise = mono.outputImage ?? cropped
+        var noise = (mono.outputImage ?? raw).cropped(to: extent)
 
-        // A touch of blur softens hard noise pixels into film-like grain rather than digital speckle.
+        // A whisper of blur takes the hard edge off the noise without turning it into clumps.
         let blur = CIFilter.gaussianBlur()
         blur.inputImage = noise
-        blur.radius = 0.6
+        blur.radius = 0.5
         noise = (blur.outputImage ?? noise).cropped(to: extent)
 
-        // Scale noise toward neutral 0.5. Overlay-blending flat 0.5 gray is a no-op. The 0.5 cap
-        // keeps even max grain tasteful instead of overwhelming.
-        let amt = CGFloat(min(max(amount, 0), 1)) * 0.5
+        // Pull strongly toward neutral 0.5 so grain stays a subtle texture; soft-light of flat 0.5
+        // is a no-op. Low cap keeps even max grain gentle.
+        let amt = CGFloat(min(max(amount, 0), 1)) * 0.15
         let intensity = CIFilter.colorMatrix()
         intensity.inputImage = noise
         intensity.rVector = CIVector(x: amt, y: 0, z: 0, w: 0)
@@ -141,7 +137,7 @@ public enum FilterPipeline {
         intensity.biasVector = CIVector(x: mid, y: mid, z: mid, w: 1)
         noise = (intensity.outputImage ?? noise).cropped(to: extent)
 
-        let blend = CIFilter.softLightBlendMode()   // gentler than overlay — subtle film texture
+        let blend = CIFilter.softLightBlendMode()   // gentle, filmic texture
         blend.backgroundImage = base
         blend.inputImage = noise
         return (blend.outputImage ?? base).cropped(to: extent)

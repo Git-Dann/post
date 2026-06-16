@@ -25,6 +25,13 @@ public final class EditorModel: Identifiable {
     /// Whether the crop geometry overlay is presented.
     public var isCropping = false
 
+    /// The currently applied style (if any). When set, the dial controls its intensity rather than
+    /// individual tools; editing a tool "bakes" the style and clears this.
+    public private(set) var activeStyle: Style?
+    /// 0...1 strength of the active style (full at 1).
+    public private(set) var styleIntensity: Double = 1
+    public var hasActiveStyle: Bool { activeStyle != nil }
+
     private var undoStack: [EditState] = []
     private var redoStack: [EditState] = []
     private var interactionSnapshot: EditState?
@@ -97,6 +104,7 @@ public final class EditorModel: Identifiable {
         guard let previous = undoStack.popLast() else { return }
         redoStack.append(state)
         state = previous
+        activeStyle = nil
         recompute()
     }
 
@@ -104,12 +112,14 @@ public final class EditorModel: Identifiable {
         guard let next = redoStack.popLast() else { return }
         undoStack.append(state)
         state = next
+        activeStyle = nil
         recompute()
     }
 
     /// Restore a persisted recipe when reopening a project. Resets undo history.
     public func load(recipe: EditState) {
         state = recipe
+        activeStyle = nil
         undoStack.removeAll()
         redoStack.removeAll()
         recompute()
@@ -120,22 +130,66 @@ public final class EditorModel: Identifiable {
         undoStack.append(state)
         redoStack.removeAll()
         state = EditState()
+        activeStyle = nil
         recompute()
     }
 
-    /// Apply a full recipe (e.g. a style preset) as a single undoable step, preserving geometry.
-    public func applyRecipe(_ recipe: EditState) {
+    // MARK: Styles
+
+    /// Apply a style as the active look at full intensity (a jumping-off point). Geometry kept.
+    public func applyStyle(_ style: Style) {
         beginInteraction()
-        var next = recipe
-        // Keep the user's framing when stamping a look.
-        next.crop = state.crop
-        next.straightenAngle = state.straightenAngle
-        next.rotationQuarterTurns = state.rotationQuarterTurns
-        next.flippedHorizontally = state.flippedHorizontally
-        next.flippedVertically = state.flippedVertically
-        state = next
+        activeStyle = style
+        styleIntensity = 1
+        applyActiveStyleToState()
         recompute()
         endInteraction()
+    }
+
+    /// Live intensity change from the style dial (snapshots happen at gesture boundaries).
+    public func setStyleIntensity(_ value: Double) {
+        guard activeStyle != nil else { return }
+        styleIntensity = min(max(value, 0), 1)
+        applyActiveStyleToState()
+        recompute()
+    }
+
+    /// Remove the active style entirely, returning to a clean image (geometry kept).
+    public func dismissStyle() {
+        guard activeStyle != nil else { return }
+        beginInteraction()
+        activeStyle = nil
+        clearToneColorFilm()
+        recompute()
+        endInteraction()
+    }
+
+    /// The user reached for a tool — keep the current (scaled) look as the new manual base and stop
+    /// treating it as a live style.
+    public func bakeStyle() {
+        activeStyle = nil
+    }
+
+    /// Write the active style's recipe (scaled by intensity) into the tone/color/film fields,
+    /// leaving geometry untouched.
+    private func applyActiveStyleToState() {
+        guard let recipe = activeStyle?.recipe else { return }
+        let i = styleIntensity
+        state.brightness = recipe.brightness * i
+        state.contrast = recipe.contrast * i
+        state.saturation = recipe.saturation * i
+        state.hue = recipe.hue * i
+        state.fade = recipe.fade * i
+        state.grain = recipe.grain * i
+    }
+
+    private func clearToneColorFilm() {
+        state.brightness = 0
+        state.contrast = 0
+        state.saturation = 0
+        state.hue = 0
+        state.fade = 0
+        state.grain = 0
     }
 
     private func recompute() {

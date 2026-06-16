@@ -3,13 +3,13 @@
   "styles": [
     { "id": "faded",  "name": "Faded",  "recipe": { "fade": 0.5,  "contrast": -0.1,  "saturation": -0.06, "hue": 0.02 } },
     { "id": "warm",   "name": "Warm",   "recipe": { "hue": 0.035, "saturation": 0.16, "brightness": 0.05, "fade": 0.1 } },
-    { "id": "film",   "name": "Film",   "recipe": { "fade": 0.3,  "grain": 0.45, "contrast": 0.08, "saturation": -0.05, "hue": 0.015 } },
+    { "id": "film",   "name": "Film",   "recipe": { "fade": 0.3,  "grain": 0.35, "contrast": 0.08, "saturation": -0.05, "hue": 0.015 } },
     { "id": "punch",  "name": "Punch",  "recipe": { "contrast": 0.45, "saturation": 0.3, "brightness": -0.03 } },
     { "id": "vivid",  "name": "Vivid",  "recipe": { "contrast": 0.16, "saturation": 0.55 } },
     { "id": "cool",   "name": "Cool",   "recipe": { "hue": -0.05, "saturation": 0.05, "brightness": 0.03, "contrast": 0.05 } },
     { "id": "mono",   "name": "Mono",   "recipe": { "saturation": -1.0, "contrast": 0.14 } },
-    { "id": "noir",   "name": "Noir",   "recipe": { "saturation": -1.0, "contrast": 0.55, "fade": 0.04, "grain": 0.35 } },
+    { "id": "noir",   "name": "Noir",   "recipe": { "saturation": -1.0, "contrast": 0.55, "fade": 0.04, "grain": 0.25 } },
     { "id": "sepia",  "name": "Sepia",  "recipe": { "saturation": -0.8, "hue": 0.05, "fade": 0.22, "brightness": 0.04 } },
-    { "id": "dream",  "name": "Dream",  "recipe": { "fade": 0.42, "brightness": 0.08, "contrast": -0.08, "grain": 0.18, "saturation": 0.14 } }
+    { "id": "dream",  "name": "Dream",  "recipe": { "fade": 0.42, "brightness": 0.08, "contrast": -0.08, "saturation": 0.14 } }
   ]
 }
