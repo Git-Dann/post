@@ -64,7 +64,6 @@ public struct HapticDial: View {
                 : .impact(weight: .medium, intensity: 0.65)
         }
         .sensoryFeedback(.impact(flexibility: .rigid, intensity: 0.9), trigger: boundHits)
-        .onAppear { if soundEnabled { DialSound.prepare() } }
         .onChange(of: detentIndex) { _, newValue in
             if soundEnabled { DialSound.tick() }
             guard newValue == 0, isBipolar, !reduceMotion else { return }
