@@ -17,9 +17,12 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     GENERATE_INFOPLIST_FILE: YES
-    # Simulator development: ad-hoc sign, no team required.
+    # Signing is pinned here so it survives `xcodegen generate` (no more re-adding the team each
+    # time). Automatic signing + the team lets Xcode pick the right cert/profile: a real
+    # "Apple Development" identity for device, ad-hoc for the Simulator.
     CODE_SIGN_STYLE: Automatic
-    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: B27Y4M6S3Y
+    CODE_SIGN_IDENTITY: "Apple Development"
 
 packages:
   PostKit:

@@ -22,14 +22,18 @@ struct LibraryBrowserView: View {
 
                 ScrollView {
                     if PhotoLibrary.status == .limited { limitedNotice }
-                    LazyVGrid(columns: columns, spacing: 3) {
-                        ForEach(assets, id: \.localIdentifier) { asset in
-                            let order = selection.firstIndex(of: asset.localIdentifier)
-                            AssetThumbnail(asset: asset, selectionOrder: order.map { $0 + 1 })
-                                .onTapGesture { toggle(asset) }
+                    if assets.isEmpty {
+                        emptyState.padding(.top, 100)
+                    } else {
+                        LazyVGrid(columns: columns, spacing: 3) {
+                            ForEach(assets, id: \.localIdentifier) { asset in
+                                let order = selection.firstIndex(of: asset.localIdentifier)
+                                AssetThumbnail(asset: asset, selectionOrder: order.map { $0 + 1 })
+                                    .onTapGesture { toggle(asset) }
+                            }
                         }
+                        .padding(3)
                     }
-                    .padding(3)
                 }
             }
             .navigationTitle("Your Library")
@@ -47,6 +51,23 @@ struct LibraryBrowserView: View {
                 }
             }
             .task { assets = PhotoLibrary.fetchImageAssets() }
+        }
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        ContentUnavailableView {
+            Label("No photos to show", systemImage: "photo.on.rectangle")
+        } description: {
+            Text(PhotoLibrary.status == .limited
+                 ? "Post can only see the photos you've selected. Tap Add More to choose some."
+                 : "There are no photos in your library yet.")
+        } actions: {
+            if PhotoLibrary.status == .limited {
+                Button("Add More") { PhotoLibrary.presentAddMore() }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Theme.accent)
+            }
         }
     }
 

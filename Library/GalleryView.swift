@@ -71,7 +71,11 @@ struct GalleryView: View {
         .sheet(isPresented: $showBrowser) {
             LibraryBrowserView { datas in createProjects(from: datas) }
         }
-        .sheet(isPresented: $showPrimer) {
+        .sheet(isPresented: $showPrimer, onDismiss: {
+            // If they just granted access, take them straight into their library to pick photos —
+            // otherwise granting appears to "do nothing".
+            if PhotoLibrary.hasAccess { showBrowser = true }
+        }) {
             PhotoAccessPrimer(
                 onAllow: { Task { await PhotoLibrary.requestAccess(); finishPriming() } },
                 onSkip: { finishPriming() }
@@ -93,7 +97,7 @@ struct GalleryView: View {
             if args.contains("--seed-project"), projects.isEmpty { seedSampleProject() }
             if args.contains("--open-sample-editor") { openSample() }
             if args.contains("--open-settings") { showSettings = true }
-            if args.contains("--open-browser") { showBrowser = true }
+            if args.contains("--open-browser") { showPrimer = false; showBrowser = true }
             #endif
         }
     }
