@@ -30,8 +30,6 @@ public struct ToolBar: View {
     private let editedTools: Set<EditTool>
     private let onSelect: (EditTool) -> Void
 
-    @State private var actionsExpanded = false
-
     public init(
         actions: [ToolBarAction] = [],
         selected: EditTool,
@@ -47,60 +45,41 @@ public struct ToolBar: View {
     }
 
     public var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: Theme.Space.m) {
-                if !actions.isEmpty {
-                    discloseChip
-                    if actionsExpanded {
-                        ForEach(actions) { action in
-                            actionChip(action)
-                                .transition(.move(edge: .leading).combined(with: .opacity))
-                        }
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: Theme.Space.m) {
+                    // Styles & Crop live to the left, off-screen by default — scroll left to reach
+                    // them, so the dial tools own the visible strip.
+                    ForEach(actions) { action in
+                        actionChip(action)
+                    }
+                    if !actions.isEmpty {
                         Divider()
                             .frame(height: 32)
                             .overlay(.white.opacity(0.15))
-                            .transition(.opacity)
+                    }
+                    ForEach(tools) { tool in
+                        chip(tool).id(tool)
                     }
                 }
-                ForEach(tools) { tool in
-                    chip(tool)
+                .padding(.horizontal, Theme.Space.l)
+                // Room so the selected chip's 1.12× scale, the dot, and the glass halo aren't clipped.
+                .padding(.vertical, 10)
+            }
+            .scrollClipDisabled()
+            .onAppear {
+                // Start scrolled so the first dial tool is at the leading edge (actions hidden left).
+                if !actions.isEmpty, let first = tools.first {
+                    proxy.scrollTo(first, anchor: .leading)
                 }
             }
-            .padding(.horizontal, Theme.Space.l)
-            // Room so the selected chip's 1.12× scale, the dot, and the glass halo aren't clipped.
-            .padding(.vertical, 10)
         }
-        // Don't let the scroll view crop the scaled/raised chips top & bottom.
-        // (No auto-scroll on selection — the row stays put so chips don't jump.)
-        .scrollClipDisabled()
     }
 
     private let chipSize: CGFloat = 54
 
-    /// Toggles the Styles/Crop group, which is otherwise tucked away to the left so the dial tools
-    /// keep the strip to themselves.
-    private var discloseChip: some View {
-        Button {
-            withAnimation(Theme.Motion.snappy) { actionsExpanded.toggle() }
-        } label: {
-            Color.clear
-                .frame(width: chipSize, height: chipSize)
-                .overlay(
-                    Image(systemName: actionsExpanded ? "chevron.left" : "chevron.right")
-                        .font(.system(size: 16, weight: .semibold))
-                )
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .glassEffect(.regular.interactive(), in: .circle)
-        .accessibilityLabel(actionsExpanded ? "Hide styles and crop" : "Show styles and crop")
-    }
-
     private func actionChip(_ action: ToolBarAction) -> some View {
-        Button {
-            action.handler()
-            withAnimation(Theme.Motion.snappy) { actionsExpanded = false }
-        } label: {
+        Button(action: action.handler) {
             Color.clear
                 .frame(width: chipSize, height: chipSize)
                 .overlay(
