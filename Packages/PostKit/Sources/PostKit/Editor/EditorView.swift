@@ -81,6 +81,10 @@ public struct EditorView: View {
                 model.update(.saturation, to: -0.4)
             }
             if args.contains("--show-info") { showInfo = true }
+            if args.contains("--demo-grain") {
+                model.selectedTool = .grain
+                model.update(.grain, to: 0.9)
+            }
             if args.contains("--open-crop") { model.isCropping = true }
             if args.contains("--live-test") {
                 Task {
@@ -340,7 +344,10 @@ public struct EditorView: View {
     }
 
     private var actionBar: some View {
-        Button { onDone(model.state) } label: {
+        Button {
+            Haptics.notify(.success)   // a small reward for finishing an edit
+            onDone(model.state)
+        } label: {
             Text("Done")
                 .font(.system(.headline, design: .rounded))
                 .padding(.horizontal, Theme.Space.xl)

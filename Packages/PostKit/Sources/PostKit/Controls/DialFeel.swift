@@ -34,4 +34,20 @@ public nonisolated enum DialFeel {
     public static let zeroHaptic: SensoryFeedback = .impact(weight: .heavy, intensity: 1.0)
     /// A rigid tap when the wheel hits the end of its range.
     public static let boundHaptic: SensoryFeedback = .impact(flexibility: .rigid, intensity: 1.0)
+
+    // MARK: Velocity acceleration
+    // Slow drags stay 1:1 for refined steps; fast spins accelerate so you can sweep the whole range.
+
+    /// Finger speed (points/sec) below which movement is pure 1:1 fine control.
+    public static let velocityFineThreshold: Double = 240
+    /// How quickly acceleration ramps in past the threshold — larger = you must spin faster.
+    public static let velocityRampScale: Double = 620
+    /// Maximum acceleration multiplier at a hard, fast spin.
+    public static let velocityMaxGain: Double = 6.5
+
+    /// Pointer-style acceleration factor for a given finger speed (points/sec).
+    public static func gain(forSpeed speed: Double) -> Double {
+        let extra = max(0, speed - velocityFineThreshold) / velocityRampScale
+        return min(1 + extra, velocityMaxGain)
+    }
 }

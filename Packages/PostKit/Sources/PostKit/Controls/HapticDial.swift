@@ -20,10 +20,13 @@ public struct HapticDial: View {
     private var isBipolar: Bool { range.lowerBound < 0 }
 
     @State private var dragStart: Double?
+    @State private var accumulated: Double = 0      // continuous (un-snapped) value, built incrementally
+    @State private var lastTranslation: CGFloat = 0
     @State private var overscroll: CGFloat = 0
     @State private var boundHits: Int = 0
     @State private var wasAtBound = false
     @State private var indicatorScale: CGFloat = 1
+    @State private var spin: CGFloat = 0            // 0…1 spin intensity → indicator glow (delight)
     @State private var coastTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -125,7 +128,9 @@ public struct HapticDial: View {
             .fill(Theme.accent)
             .frame(width: 3, height: height * 0.7)
             .scaleEffect(x: 1, y: indicatorScale, anchor: .center)
-            .shadow(color: Theme.accent.opacity(0.6), radius: 6)
+            // Delight: the indicator blooms brighter the faster you spin the wheel.
+            .shadow(color: Theme.accent.opacity(0.55 + 0.45 * Double(spin)), radius: 5 + 15 * spin)
+            .shadow(color: Theme.accent.opacity(0.55 * Double(spin)), radius: 3 + 9 * spin)
     }
 
     // MARK: Gesture
@@ -136,13 +141,25 @@ public struct HapticDial: View {
                 if dragStart == nil {
                     coastTask?.cancel()          // grabbing the wheel stops any coast
                     dragStart = value
+                    accumulated = value
+                    lastTranslation = gesture.translation.width
                     onBegin()
                 }
-                let start = dragStart ?? value
-                let raw = start - Double(gesture.translation.width / pointsPerUnit)
+                // Incremental + velocity-accelerated: a slow drag is 1:1 (refined steps), while a
+                // fast spin multiplies each step so you can sweep the whole range quickly.
+                let delta = gesture.translation.width - lastTranslation
+                lastTranslation = gesture.translation.width
+                let speed = abs(Double(gesture.velocity.width))
+                accumulated -= Double(delta / pointsPerUnit) * DialFeel.gain(forSpeed: speed)
 
-                let beyond = raw < range.lowerBound || raw > range.upperBound
-                if beyond {
+                // Keep a fast spin from overshooting the ends past the rubber-band zone.
+                let margin = Double(90 / pointsPerUnit)
+                accumulated = min(max(accumulated, range.lowerBound - margin), range.upperBound + margin)
+
+                spin = min(1, CGFloat(speed) / 2200)   // drives the indicator glow
+
+                let raw = accumulated
+                if raw < range.lowerBound || raw > range.upperBound {
                     let bound = raw < range.lowerBound ? range.lowerBound : range.upperBound
                     overscroll = rubberBand(CGFloat(raw - bound) * pointsPerUnit)
                     setValue(bound)
@@ -167,6 +184,7 @@ public struct HapticDial: View {
                 if !reduceMotion, !hitBound, abs(velocity) > 0.5 {
                     startCoast(velocity: velocity)
                 } else {
+                    withAnimation(.easeOut(duration: 0.4)) { spin = 0 }
                     onCommit()
                 }
             }
@@ -182,6 +200,7 @@ public struct HapticDial: View {
             let friction = DialFeel.coastFriction
             while !Task.isCancelled, abs(speed) > DialFeel.coastStopThreshold {
                 let next = value + speed * dt
+                spin = min(1, CGFloat(abs(speed)) / 9)   // glow tracks the coast, fading as it slows
                 if next <= range.lowerBound || next >= range.upperBound {
                     setValue(next)
                     boundHits += 1            // rigid tap on hitting the edge
@@ -195,6 +214,7 @@ public struct HapticDial: View {
                 setValue((value / detent).rounded() * detent)   // settle on a detent
                 onCommit()
             }
+            withAnimation(.easeOut(duration: 0.5)) { spin = 0 }
         }
     }
 

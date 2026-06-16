@@ -113,8 +113,10 @@ public enum FilterPipeline {
         let extent = base.extent
         guard !extent.isInfinite, !extent.isNull, !extent.isEmpty else { return base }
 
-        let strength = Float(min(max(amount, 0), 1) * 0.22)   // tasteful cap
-        let size = Float(1.4 * grainScale)                    // match preview/export density
+        // Grain feel — tune here. `strength` = overall intensity; `size` = noise cell size in px,
+        // where SMALLER = finer, less "thick" grain. (Was 0.22 / 1.4 — dialled finer + lighter.)
+        let strength = Float(min(max(amount, 0), 1) * 0.14)
+        let size = Float(0.8 * grainScale)                    // finer cells; grainScale matches preview↔export
         return kernel.apply(extent: extent, arguments: [base, strength, size]) ?? base
     }
 }
