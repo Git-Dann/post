@@ -22,6 +22,24 @@ public nonisolated struct Style: Codable, Sendable, Identifiable, Equatable {
     }
 }
 
+public extension Style {
+    /// The original, untouched image — a no-op recipe (geometry is kept; tone/colour/film cleared).
+    static let original = Style(id: "og", name: "OG", recipe: EditState())
+
+    /// A flat "Process Zero" baseline: Apple's punchy computational look (contrast, vibrancy, HDR
+    /// lift) pulled back toward a more natural, film-like starting point you can build from.
+    static let processZero: Style = {
+        var recipe = EditState()
+        recipe.contrast = -0.18
+        recipe.saturation = -0.12
+        recipe.fade = 0.10
+        return Style(id: "zero", name: "ZERO", recipe: recipe)
+    }()
+
+    /// The two baselines shown before the divider in the styles picker.
+    static let baselines: [Style] = [.original, .processZero]
+}
+
 /// The versioned collection of styles, decoded from `styles.json` (bundled) or, later, a remote feed.
 public nonisolated struct StyleManifest: Codable, Sendable {
     public let version: Int

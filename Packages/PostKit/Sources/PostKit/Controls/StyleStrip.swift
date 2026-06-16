@@ -22,10 +22,14 @@ public struct StyleStrip: View {
 
     public var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: Theme.Space.m) {
-                ForEach(styles) { style in
-                    chip(style)
-                }
+            HStack(alignment: .top, spacing: Theme.Space.m) {
+                // Baselines first: OG (the original) and ZERO (a flat "Process Zero" base).
+                ForEach(Style.baselines) { chip($0) }
+                // The same divider as the tool strip, separating baselines from the creative looks.
+                Rectangle()
+                    .fill(.white.opacity(0.15))
+                    .frame(width: 1, height: 76)
+                ForEach(styles) { chip($0) }
             }
             .padding(.horizontal, Theme.Space.l)
         }
@@ -73,7 +77,7 @@ public struct StyleStrip: View {
         let small = source.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
 
         var result: [String: UIImage] = [:]
-        for style in styles {
+        for style in Style.baselines + styles {
             let output = FilterPipeline.makeImage(source: small, state: style.recipe, grainScale: 1)
             if let cg = Self.context.createCGImage(output, from: output.extent) {
                 result[style.id] = UIImage(cgImage: cg)
