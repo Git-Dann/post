@@ -33,4 +33,13 @@ public final class Project {
         self.createdAt = createdAt
         self.modifiedAt = createdAt
     }
+
+    /// Whether the saved recipe carries any actual adjustment — drives the "edited" badge in the
+    /// gallery. (Transient/computed, not persisted.)
+    public var isEdited: Bool {
+        guard !recipeData.isEmpty,
+              let state = try? JSONDecoder().decode(EditState.self, from: recipeData)
+        else { return false }
+        return !state.isIdentity
+    }
 }

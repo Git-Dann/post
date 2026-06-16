@@ -253,6 +253,17 @@ private struct ProjectCard: View {
             RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
                 .strokeBorder(.white.opacity(0.08), lineWidth: 1)
         )
+        // Small glass badge marking projects that carry adjustments.
+        .overlay(alignment: .topTrailing) {
+            if project.isEdited {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Theme.accent)
+                    .padding(7)
+                    .glassEffect(.regular, in: .circle)
+                    .padding(8)
+            }
+        }
     }
 }
 
