@@ -56,12 +56,8 @@ public enum EditTool: String, CaseIterable, Identifiable, Sendable {
     }
 
     /// Detent granularity in value units — the spacing between ruler ticks / haptic stops.
-    public var detent: Double {
-        switch self {
-        case .fade, .grain: 0.025
-        default: 0.05
-        }
-    }
+    /// 0.02 → steps of 2 on the readout (finer than the old steps of 5), and more ruler lines.
+    public var detent: Double { 0.02 }
 
     public var isBipolar: Bool { range.lowerBound < 0 }
 

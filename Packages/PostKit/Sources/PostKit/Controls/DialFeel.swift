@@ -16,8 +16,8 @@ public nonisolated enum DialFeel {
     // MARK: Grip & precision
 
     /// Finger travel, in points, needed to advance one detent. Higher = a grippier wheel that takes
-    /// more deliberate movement, giving finer control. (Was 17; 24 is noticeably grippier.)
-    public static let pointsPerDetent: CGFloat = 24
+    /// more deliberate movement; lower shows more lines at once. (Balanced against the finer detents.)
+    public static let pointsPerDetent: CGFloat = 18
 
     // MARK: Momentum (flick to coast)
 

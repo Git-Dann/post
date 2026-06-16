@@ -34,7 +34,7 @@ public struct CropOverlay: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            header
+            topControls
             GeometryReader { geo in
                 let fitted = fittedRect(in: geo.size)
                 ZStack {
@@ -44,38 +44,39 @@ public struct CropOverlay: View {
                 }
                 .contentShape(Rectangle())
             }
-            controls
+            adjustControls
+            actionBar
         }
         .background(Color.black.ignoresSafeArea())
     }
 
-    // MARK: Header (cancel / title / done)
+    // MARK: Top controls (rotate / flip)
 
-    private var header: some View {
-        HStack {
-            GlassIconButton("xmark") { model.isCropping = false }
-            Spacer()
-            Text("Crop & Rotate")
-                .font(.system(.headline, design: .rounded))
-            Spacer()
-            Button {
-                commit()
-                model.isCropping = false
-            } label: {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 18, weight: .bold))
-                    .frame(width: 48, height: 48)
+    private var topControls: some View {
+        HStack(spacing: Theme.Space.l) {
+            GlassIconButton("rotate.left") {
+                withAnimation(Theme.Motion.snappy) { quarterTurns = (quarterTurns + 3) % 4 }
+                Haptics.impact(.light)
             }
-            .buttonStyle(.plain)
-            .glassEffect(.regular.tint(Theme.accent).interactive(), in: .circle)
+            GlassIconButton("rotate.right") {
+                withAnimation(Theme.Motion.snappy) { quarterTurns = (quarterTurns + 1) % 4 }
+                Haptics.impact(.light)
+            }
+            GlassIconButton("arrow.left.and.right.righttriangle.left.righttriangle.right") {
+                flipH.toggle(); Haptics.impact(.light)
+            }
+            GlassIconButton("arrow.up.and.down.righttriangle.up.righttriangle.down") {
+                flipV.toggle(); Haptics.impact(.light)
+            }
         }
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, Theme.Space.l)
         .padding(.top, Theme.Space.s)
     }
 
-    // MARK: Bottom controls (straighten wheel + aspect + rotate/flip)
+    // MARK: Straighten wheel + aspect chips
 
-    private var controls: some View {
+    private var adjustControls: some View {
         VStack(spacing: Theme.Space.m) {
             HapticDial(
                 value: $straighten,
@@ -91,30 +92,31 @@ public struct CropOverlay: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, Theme.Space.l)
-
-            HStack(spacing: Theme.Space.l) {
-                GlassIconButton("rotate.left") {
-                    withAnimation(Theme.Motion.snappy) {
-                        quarterTurns = (quarterTurns + 3) % 4
-                    }
-                    Haptics.impact(.light)
-                }
-                GlassIconButton("rotate.right") {
-                    withAnimation(Theme.Motion.snappy) {
-                        quarterTurns = (quarterTurns + 1) % 4
-                    }
-                    Haptics.impact(.light)
-                }
-                GlassIconButton("arrow.left.and.right.righttriangle.left.righttriangle.right") {
-                    flipH.toggle(); Haptics.impact(.light)
-                }
-                GlassIconButton("arrow.up.and.down.righttriangle.up.righttriangle.down") {
-                    flipV.toggle(); Haptics.impact(.light)
-                }
-            }
-            .padding(.bottom, Theme.Space.m)
         }
         .padding(.vertical, Theme.Space.m)
+    }
+
+    // MARK: Action bar — the same Done + X as the editor (uniformity).
+
+    private var actionBar: some View {
+        Button {
+            commit()
+            model.isCropping = false
+        } label: {
+            Text("Done")
+                .font(.system(.headline, design: .rounded))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.black)
+        .glassEffect(.regular.tint(.white.opacity(0.9)).interactive(), in: .capsule)
+        .overlay(alignment: .trailing) {
+            GlassIconButton("xmark") { model.isCropping = false }
+        }
+        .padding(.horizontal, Theme.Space.l)
+        .padding(.bottom, Theme.Space.s)
     }
 
     private func aspectChip(_ option: AspectOption) -> some View {

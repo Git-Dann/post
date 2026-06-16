@@ -19,6 +19,7 @@ public struct EditorView: View {
     @State private var isAdjustingDial = false
     @State private var showInfo = false
     @State private var celebrate = false
+    @State private var doneGlow = false
     @Namespace private var infoGlass
     @AppStorage("soundEffectsEnabled") private var soundEnabled = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -69,7 +70,6 @@ public struct EditorView: View {
             }
         }
         .animation(Theme.Motion.settle, value: model.isCropping)
-        .animation(Theme.Motion.settle, value: showStyles)
         .statusBarHidden()
         .sheet(item: $shareItem) { item in ActivityView(items: [item.url]) }
         .task {
@@ -275,13 +275,13 @@ public struct EditorView: View {
     private var resetButton: some View {
         if showStyles && model.hasActiveStyle {
             GlassIconButton("xmark") {
-                withAnimation(Theme.Motion.settle) { model.dismissStyle() }
+                model.dismissStyle()
                 Haptics.impact(.rigid)
             }
             .transition(.scale.combined(with: .opacity))
         } else if showStyles {
             GlassIconButton("xmark") {
-                withAnimation(Theme.Motion.settle) { showStyles = false }
+                showStyles = false
             }
             .transition(.scale.combined(with: .opacity))
         } else if model.value(of: model.selectedTool) != 0 {
@@ -348,7 +348,9 @@ public struct EditorView: View {
         ToolBar(
             actions: [
                 ToolBarAction(id: "styles", title: "Styles", systemImage: "wand.and.stars", tinted: showStyles) {
-                    withAnimation(Theme.Motion.settle) { showStyles = true }
+                    // Tapping Styles always lands on the picker — if a look is active, step back to it.
+                    if model.hasActiveStyle { model.dismissStyle() }
+                    showStyles = true
                 },
                 ToolBarAction(id: "crop", title: "Crop & Rotate", systemImage: "crop.rotate", showsDot: geometryEdited) {
                     model.isCropping = true
@@ -358,31 +360,41 @@ public struct EditorView: View {
             editedTools: editedTools,
             highlightSelection: !showStyles   // in Styles mode the Styles chip is the active one
         ) { tool in
-            withAnimation(Theme.Motion.snappy) {
-                // Reaching for a tool turns the active style into the manual starting point.
-                if model.hasActiveStyle { model.bakeStyle() }
-                showStyles = false
-                model.selectedTool = tool
-            }
+            // Reaching for a tool turns the active style into the manual starting point.
+            if model.hasActiveStyle { model.bakeStyle() }
+            showStyles = false
+            withAnimation(Theme.Motion.snappy) { model.selectedTool = tool }
         }
     }
 
     private var actionBar: some View {
-        Button {
-            Haptics.notify(.success)   // a small reward for finishing an edit
-            onDone(model.state)
-        } label: {
+        Button { commitDone() } label: {
             Text("Done")
                 .font(.system(.headline, design: .rounded))
-                .padding(.horizontal, Theme.Space.xl)
+                .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
+                .contentShape(.capsule)
         }
-        .buttonStyle(.glassProminent)
-        .tint(.white)
+        .buttonStyle(.plain)
         .foregroundStyle(.black)
-        .frame(maxWidth: .infinity)
+        // Translucent ~90% Liquid Glass capsule (was a solid white prominent button).
+        .glassEffect(.regular.tint(.white.opacity(0.9)).interactive(), in: .capsule)
+        // "Save" flourish: the capsule glows when tapped (paired with the sparkle on the image).
+        .shadow(color: Theme.accent.opacity(doneGlow ? 0.8 : 0), radius: doneGlow ? 22 : 0)
         .overlay(alignment: .trailing) { resetButton }
         .padding(.horizontal, Theme.Space.l)
+    }
+
+    /// Done is effectively "save": a quick glow + sparkle, then hand the recipe back.
+    private func commitDone() {
+        Haptics.notify(.success)
+        guard !reduceMotion else { onDone(model.state); return }
+        triggerCelebrate()
+        withAnimation(.easeOut(duration: 0.45)) { doneGlow = true }
+        Task {
+            try? await Task.sleep(for: .milliseconds(380))
+            onDone(model.state)
+        }
     }
 
     private var readout: some View {
