@@ -101,9 +101,8 @@ public enum FilterPipeline {
 
     // MARK: Grain (Core Image Metal kernel — see Shaders/Grain.metal)
 
-    /// Loaded once from the host bundle's metallib. `nonisolated(unsafe)` because `CIColorKernel`
-    /// isn't `Sendable`, but it's immutable after creation and safe to apply concurrently.
-    nonisolated(unsafe) private static let grainKernel: CIColorKernel? = {
+    /// Loaded once from the host bundle's metallib.
+    private static nonisolated let grainKernel: CIColorKernel? = {
         guard let url = Bundle.main.url(forResource: "default", withExtension: "metallib"),
               let data = try? Data(contentsOf: url) else { return nil }
         return try? CIColorKernel(functionName: "postGrain", fromMetalLibraryData: data)

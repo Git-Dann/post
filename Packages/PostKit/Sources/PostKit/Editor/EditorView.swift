@@ -82,6 +82,14 @@ public struct EditorView: View {
             }
             if args.contains("--show-info") { showInfo = true }
             if args.contains("--open-crop") { model.isCropping = true }
+            if args.contains("--live-test") {
+                Task {
+                    for i in 0..<80 {
+                        model.update(.brightness, to: (Double(i % 16) / 16.0 - 0.5))
+                        try? await Task.sleep(for: .milliseconds(120))
+                    }
+                }
+            }
             if args.contains("--demo-style") {
                 showStyles = true
                 if let style = styleProvider.styles.first(where: { $0.id == "film" }) {
