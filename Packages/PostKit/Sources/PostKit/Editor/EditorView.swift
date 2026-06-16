@@ -327,7 +327,8 @@ public struct EditorView: View {
                 }
             ],
             selected: model.selectedTool,
-            editedTools: editedTools
+            editedTools: editedTools,
+            highlightSelection: !showStyles   // in Styles mode the Styles chip is the active one
         ) { tool in
             withAnimation(Theme.Motion.snappy) {
                 // Reaching for a tool turns the active style into the manual starting point.

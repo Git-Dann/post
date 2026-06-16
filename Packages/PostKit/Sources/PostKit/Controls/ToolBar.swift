@@ -28,6 +28,9 @@ public struct ToolBar: View {
     private let selected: EditTool
     private let tools: [EditTool]
     private let editedTools: Set<EditTool>
+    /// When false (e.g. while a mode like Styles is active), no dial tool shows the selected
+    /// highlight — so the active *mode* chip reads as the current selection instead.
+    private let highlightSelection: Bool
     private let onSelect: (EditTool) -> Void
 
     public init(
@@ -35,12 +38,14 @@ public struct ToolBar: View {
         selected: EditTool,
         tools: [EditTool] = EditTool.dialTools,
         editedTools: Set<EditTool> = [],
+        highlightSelection: Bool = true,
         onSelect: @escaping (EditTool) -> Void
     ) {
         self.actions = actions
         self.selected = selected
         self.tools = tools
         self.editedTools = editedTools
+        self.highlightSelection = highlightSelection
         self.onSelect = onSelect
     }
 
@@ -112,7 +117,7 @@ public struct ToolBar: View {
     }
 
     private func chip(_ tool: EditTool) -> some View {
-        let isSelected = tool == selected
+        let isSelected = highlightSelection && tool == selected
         return Button {
             onSelect(tool)
         } label: {
