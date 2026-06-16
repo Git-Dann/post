@@ -1,7 +1,6 @@
 import SwiftUI
 import SwiftData
 import PhotosUI
-import Photos
 import UIKit
 import CoreImage
 import PostKit
@@ -21,8 +20,8 @@ private struct InfoSheet: Identifiable {
 }
 
 /// The home surface: a grid of re-editable projects with a clean floating glass header (no nav-bar
-/// artifacts) and an import flow that supports one-by-one or many photos, with an explicit
-/// full-library-access option.
+/// artifacts) and a privacy-first import flow — the system photo picker (out-of-process, no
+/// library permission required) that imports one or many photos.
 struct GalleryView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Project.modifiedAt, order: .reverse) private var projects: [Project]
@@ -30,7 +29,6 @@ struct GalleryView: View {
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var session: EditorSession?
     @State private var showSettings = false
-    @State private var showImportOptions = false
     @State private var showPicker = false
     @State private var infoSheet: InfoSheet?
     @AppStorage("removeLocationOnExport") private var removeLocation = false
@@ -61,14 +59,10 @@ struct GalleryView: View {
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(item: $infoSheet) { sheet in MetadataView(rows: sheet.rows) }
-        .photosPicker(isPresented: $showPicker, selection: $pickerItems, matching: .images, photoLibrary: .shared())
-        .confirmationDialog("Add photos", isPresented: $showImportOptions, titleVisibility: .visible) {
-            Button("Choose Photos") { showPicker = true }
-            Button("Allow Full Library Access…") { requestFullAccessThenPick() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Pick one or many. Post only ever reads photos you choose — grant full access only if you'd like to import freely.")
-        }
+        // Out-of-process picker: no photo-library permission needed, supports one or many, and is
+        // the most private option — Post only ever sees the photos you pick. (Using `.shared()`
+        // here forced the in-process picker, which needed authorization and could present black.)
+        .photosPicker(isPresented: $showPicker, selection: $pickerItems, matching: .images)
         .onChange(of: pickerItems) { _, items in
             guard !items.isEmpty else { return }
             importItems(items)
@@ -89,7 +83,7 @@ struct GalleryView: View {
         HStack {
             GlassIconButton("gearshape") { showSettings = true }
             Spacer()
-            GlassIconButton("plus", prominent: true) { showImportOptions = true }
+            GlassIconButton("plus", prominent: true) { showPicker = true }
         }
         .padding(.horizontal, Theme.Space.l)
         .padding(.top, Theme.Space.s)
@@ -128,7 +122,7 @@ struct GalleryView: View {
     private var emptyState: some View {
         VStack {
             Spacer()
-            Button { showImportOptions = true } label: {
+            Button { showPicker = true } label: {
                 VStack(spacing: Theme.Space.m) {
                     Image(systemName: "photo.on.rectangle.angled")
                         .font(.system(size: 52, weight: .light))
@@ -149,13 +143,6 @@ struct GalleryView: View {
     }
 
     // MARK: Actions
-
-    private func requestFullAccessThenPick() {
-        Task {
-            _ = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
-            showPicker = true   // proceed regardless; the picker works either way
-        }
-    }
 
     private func importItems(_ items: [PhotosPickerItem]) {
         Task {
