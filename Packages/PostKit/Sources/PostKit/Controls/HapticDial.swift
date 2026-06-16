@@ -14,8 +14,8 @@ public struct HapticDial: View {
     private let onBegin: () -> Void
     private let onCommit: () -> Void
 
-    // Wider tick spacing = more finger travel per detent = finer, more deliberate edits.
-    private let tickSpacing: CGFloat = 17
+    // Finger travel per detent — the dial's "grip". Tune in `DialFeel`.
+    private var tickSpacing: CGFloat { DialFeel.pointsPerDetent }
     private var pointsPerUnit: CGFloat { tickSpacing / detent }
     private var isBipolar: Bool { range.lowerBound < 0 }
 
@@ -57,13 +57,10 @@ public struct HapticDial: View {
         }
         .frame(height: 64)
         .sensoryFeedback(trigger: detentIndex) { _, newValue in
-            // Crisper, more forceful per-tick feedback than the light .selection tap;
-            // a full-strength thunk when landing on the zero/center detent.
-            newValue == 0 && isBipolar
-                ? .impact(weight: .heavy, intensity: 1.0)
-                : .impact(weight: .medium, intensity: 0.65)
+            // Per-tick feedback (and a fuller thunk on the zero/center detent). Tune in `DialFeel`.
+            newValue == 0 && isBipolar ? DialFeel.zeroHaptic : DialFeel.tickHaptic
         }
-        .sensoryFeedback(.impact(flexibility: .rigid, intensity: 0.9), trigger: boundHits)
+        .sensoryFeedback(DialFeel.boundHaptic, trigger: boundHits)
         .onChange(of: detentIndex) { _, newValue in
             if soundEnabled { DialSound.tick() }
             guard newValue == 0, isBipolar, !reduceMotion else { return }
@@ -182,8 +179,8 @@ public struct HapticDial: View {
         coastTask = Task { @MainActor in
             var speed = velocity
             let dt = 1.0 / 60.0
-            let friction = 0.94
-            while !Task.isCancelled, abs(speed) > 0.15 {
+            let friction = DialFeel.coastFriction
+            while !Task.isCancelled, abs(speed) > DialFeel.coastStopThreshold {
                 let next = value + speed * dt
                 if next <= range.lowerBound || next >= range.upperBound {
                     setValue(next)
