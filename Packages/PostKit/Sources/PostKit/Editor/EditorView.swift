@@ -277,6 +277,11 @@ public struct EditorView: View {
             Text(model.activeStyle?.name ?? "Style")
                 .font(.system(.subheadline, design: .rounded))
                 .foregroundStyle(.white.opacity(0.7))
+            if let artist = model.activeStyle?.artist {
+                Text("by \(artist)")
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Theme.accent)
+            }
         }
         .shadow(color: .black.opacity(0.4), radius: 4)
         .animation(Theme.Motion.snappy, value: model.styleIntensity)

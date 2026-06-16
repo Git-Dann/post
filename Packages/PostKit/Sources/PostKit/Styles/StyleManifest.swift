@@ -7,11 +7,18 @@ public nonisolated struct Style: Codable, Sendable, Identifiable, Equatable {
     public let id: String
     public let name: String
     public let recipe: EditState
+    /// Optional attribution for artist styles / collaborations — shown in the editor when set.
+    public let artist: String?
+    /// Optional pack/collection name (e.g. a collab) for grouping styles. Omitted = house style.
+    public let collection: String?
 
-    public init(id: String, name: String, recipe: EditState) {
+    public init(id: String, name: String, recipe: EditState,
+                artist: String? = nil, collection: String? = nil) {
         self.id = id
         self.name = name
         self.recipe = recipe
+        self.artist = artist
+        self.collection = collection
     }
 }
 
