@@ -189,7 +189,7 @@ public struct EditorView: View {
             }
         }
         .padding(Theme.Space.l)
-        .frame(width: 280, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// The dial (or styles strip) that lives inside the bottom of the image, over a scrim.
