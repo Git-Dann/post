@@ -9,10 +9,12 @@ import CoreImage
 /// It is deliberately "dumb": hand it the already-filtered `CIImage` and it draws it. The
 /// editor owns the `FilterPipeline`.
 public struct MetalImageView: UIViewRepresentable {
-    private let image: CIImage?
+    /// Pulled every frame by the free-running draw loop, so the preview always reflects the latest
+    /// edit live — independent of SwiftUI re-render timing. (Autoclosure keeps call sites unchanged.)
+    private let provider: @MainActor () -> CIImage?
 
-    public init(image: CIImage?) {
-        self.image = image
+    public init(image: @autoclosure @escaping @MainActor () -> CIImage?) {
+        self.provider = image
     }
 
     public func makeCoordinator() -> Renderer { Renderer() }
@@ -34,13 +36,12 @@ public struct MetalImageView: UIViewRepresentable {
         if let layer = view.layer as? CAMetalLayer {
             layer.colorspace = CGColorSpace(name: CGColorSpace.displayP3)
         }
-        context.coordinator.displayImage = image
+        context.coordinator.provider = provider
         return view
     }
 
     public func updateUIView(_ view: MTKView, context: Context) {
-        context.coordinator.displayImage = image
-        view.setNeedsDisplay()
+        context.coordinator.provider = provider
     }
 
     /// MTKView delegate + Core Image renderer. Plain (non-isolated) class; all delegate calls
@@ -51,8 +52,8 @@ public struct MetalImageView: UIViewRepresentable {
         private let ciContext: CIContext
         private let outputColorSpace = CGColorSpace(name: CGColorSpace.displayP3)!
 
-        /// Set on the main thread from `updateUIView`; read on the main thread in `draw`.
-        var displayImage: CIImage?
+        /// Set on the main thread from `updateUIView`; invoked each frame on the main thread in `draw`.
+        var provider: (@MainActor () -> CIImage?)?
 
         override init() {
             guard let device = MTLCreateSystemDefaultDevice(),
@@ -73,6 +74,8 @@ public struct MetalImageView: UIViewRepresentable {
         public func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
         public func draw(in view: MTKView) {
+            // MTKView always calls draw on the main thread, so the main-actor provider is safe here.
+            let displayImage = MainActor.assumeIsolated { provider?() }
             guard let displayImage,
                   let drawable = view.currentDrawable,
                   let commandBuffer = commandQueue.makeCommandBuffer() else { return }
