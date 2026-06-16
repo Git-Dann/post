@@ -164,6 +164,16 @@ public final class EditorModel: Identifiable {
         endInteraction()
     }
 
+    /// Revert the look to the original image — clears tone/colour/film and any active style (geometry
+    /// kept), without entering the intensity flow. Used by the "OG" baseline card (a clean revert).
+    public func revertToOriginal() {
+        beginInteraction()
+        activeStyle = nil
+        clearToneColorFilm()
+        recompute()
+        endInteraction()
+    }
+
     /// The user reached for a tool — keep the current (scaled) look as the new manual base and stop
     /// treating it as a live style.
     public func bakeStyle() {
