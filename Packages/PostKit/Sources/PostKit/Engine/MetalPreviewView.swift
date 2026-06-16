@@ -23,8 +23,11 @@ public struct MetalImageView: UIViewRepresentable {
         view.delegate = context.coordinator
         view.framebufferOnly = false                 // CIContext must WRITE the drawable texture
         view.colorPixelFormat = .rgba16Float          // wide-gamut, no banding on fades/grain
-        view.isPaused = true                           // draw on demand
-        view.enableSetNeedsDisplay = true
+        // Free-running so the preview reflects every edit instantly during a drag (the draw loop
+        // pulls the latest image each frame) rather than only updating when the gesture ends.
+        view.isPaused = false
+        view.enableSetNeedsDisplay = false
+        view.preferredFramesPerSecond = 60
         view.isOpaque = true
         view.clearColor = MTLClearColor(red: 0.05, green: 0.05, blue: 0.06, alpha: 1)
         view.backgroundColor = .clear

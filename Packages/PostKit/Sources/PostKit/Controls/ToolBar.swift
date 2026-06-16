@@ -30,6 +30,8 @@ public struct ToolBar: View {
     private let editedTools: Set<EditTool>
     private let onSelect: (EditTool) -> Void
 
+    @State private var actionsExpanded = false
+
     public init(
         actions: [ToolBarAction] = [],
         selected: EditTool,
@@ -47,13 +49,18 @@ public struct ToolBar: View {
     public var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Theme.Space.m) {
-                ForEach(actions) { action in
-                    actionChip(action)
-                }
                 if !actions.isEmpty {
-                    Divider()
-                        .frame(height: 32)
-                        .overlay(.white.opacity(0.15))
+                    discloseChip
+                    if actionsExpanded {
+                        ForEach(actions) { action in
+                            actionChip(action)
+                                .transition(.move(edge: .leading).combined(with: .opacity))
+                        }
+                        Divider()
+                            .frame(height: 32)
+                            .overlay(.white.opacity(0.15))
+                            .transition(.opacity)
+                    }
                 }
                 ForEach(tools) { tool in
                     chip(tool)
@@ -70,8 +77,30 @@ public struct ToolBar: View {
 
     private let chipSize: CGFloat = 54
 
+    /// Toggles the Styles/Crop group, which is otherwise tucked away to the left so the dial tools
+    /// keep the strip to themselves.
+    private var discloseChip: some View {
+        Button {
+            withAnimation(Theme.Motion.snappy) { actionsExpanded.toggle() }
+        } label: {
+            Color.clear
+                .frame(width: chipSize, height: chipSize)
+                .overlay(
+                    Image(systemName: actionsExpanded ? "chevron.left" : "chevron.right")
+                        .font(.system(size: 16, weight: .semibold))
+                )
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: .circle)
+        .accessibilityLabel(actionsExpanded ? "Hide styles and crop" : "Show styles and crop")
+    }
+
     private func actionChip(_ action: ToolBarAction) -> some View {
-        Button(action: action.handler) {
+        Button {
+            action.handler()
+            withAnimation(Theme.Motion.snappy) { actionsExpanded = false }
+        } label: {
             Color.clear
                 .frame(width: chipSize, height: chipSize)
                 .overlay(

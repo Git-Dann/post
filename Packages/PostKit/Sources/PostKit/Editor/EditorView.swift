@@ -81,6 +81,7 @@ public struct EditorView: View {
                 model.update(.saturation, to: -0.4)
             }
             if args.contains("--show-info") { showInfo = true }
+            if args.contains("--open-crop") { model.isCropping = true }
             if args.contains("--demo-style") {
                 showStyles = true
                 if let style = styleProvider.styles.first(where: { $0.id == "film" }) {

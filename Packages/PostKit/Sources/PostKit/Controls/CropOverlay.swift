@@ -84,14 +84,13 @@ public struct CropOverlay: View {
             )
             .padding(.horizontal, Theme.Space.l)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: Theme.Space.s) {
-                    ForEach(AspectOption.allCases) { option in
-                        aspectChip(option)
-                    }
+            HStack(spacing: Theme.Space.s) {
+                ForEach(AspectOption.allCases) { option in
+                    aspectChip(option)
                 }
-                .padding(.horizontal, Theme.Space.l)
             }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, Theme.Space.l)
 
             HStack(spacing: Theme.Space.l) {
                 GlassIconButton("rotate.left") {
@@ -220,6 +219,9 @@ public struct CropOverlay: View {
     @State private var lastCropOrigin: CGPoint?
 
     private func resize(handle: Handle, to location: CGPoint, fitted: CGRect) {
+        // A manual handle drag is a free-form crop — drop any locked aspect ratio.
+        if aspect != .free { aspect = .free }
+
         var nx = (location.x - fitted.minX) / fitted.width
         var ny = (location.y - fitted.minY) / fitted.height
         nx = min(max(0, nx), 1)
