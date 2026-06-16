@@ -136,28 +136,29 @@ public struct EditorView: View {
     /// sitting where the (i) was.
     private var infoMorph: some View {
         GlassEffectContainer {
-            if showInfo {
-                metadataPanelContent
-                    .glassEffect(in: .rect(cornerRadius: Theme.Radius.card))
+            Group {
+                if showInfo {
+                    metadataPanelContent
+                        .glassEffect(in: .rect(cornerRadius: Theme.Radius.card))
+                        .glassEffectID("info", in: infoGlass)
+                } else {
+                    Button {
+                        withAnimation { showInfo = true }
+                    } label: {
+                        Color.clear
+                            .frame(width: 38, height: 38)
+                            .overlay(Image(systemName: "info").font(.system(size: 16, weight: .semibold)))
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .glassEffect(.regular.interactive(), in: .circle)
                     .glassEffectID("info", in: infoGlass)
-            } else {
-                Button {
-                    showInfo = true
-                } label: {
-                    Color.clear
-                        .frame(width: 38, height: 38)
-                        .overlay(Image(systemName: "info").font(.system(size: 16, weight: .semibold)))
-                        .contentShape(Circle())
                 }
-                .buttonStyle(.plain)
-                .glassEffect(.regular.interactive(), in: .circle)
-                .glassEffectID("info", in: infoGlass)
             }
         }
         .padding(Theme.Space.m)
-        // One animation drives BOTH the glass morph and the layout collapse, so the (i) doesn't
-        // finish morphing and then step to its resting position.
-        .animation(.smooth, value: showInfo)
+        // The native glassEffectID morph is driven by the withAnimation transaction on the buttons —
+        // a single driver (no competing .animation(value:)), so it doesn't step on close.
     }
 
     /// Inline, top-level metadata (format, size, dimensions, date). The X sits top-left, over where
@@ -167,7 +168,7 @@ public struct EditorView: View {
         return VStack(alignment: .leading, spacing: Theme.Space.s) {
             HStack {
                 Button {
-                    showInfo = false
+                    withAnimation { showInfo = false }
                 } label: {
                     Color.clear
                         .frame(width: 30, height: 30)
