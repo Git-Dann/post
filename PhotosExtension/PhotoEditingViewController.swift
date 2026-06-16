@@ -8,13 +8,14 @@ import PostKit
 /// recipe), hosts the chromeless `EditorView`, and on Done writes the rendered image plus the
 /// recipe back as `adjustmentData` — so the edit stays reversible in Photos.
 ///
-/// `@preconcurrency` conformance: `PHContentEditingController` predates strict concurrency, so its
-/// requirements are nonisolated. Photos calls `startContentEditing` on the main thread (so we keep
-/// it main-actor) and `finishContentEditing` on a background queue (kept `nonisolated`).
-final class PhotoEditingViewController: UIViewController, @preconcurrency PHContentEditingController {
+/// In the iOS 27 SDK, `PHContentEditingController` carries proper concurrency annotations:
+/// `canHandle` is nonisolated, `startContentEditing` is main-actor, and `finishContentEditing` is
+/// called off the main thread (kept `nonisolated`). The format identifiers are `nonisolated` so the
+/// nonisolated `canHandle` can read them.
+final class PhotoEditingViewController: UIViewController, PHContentEditingController {
 
-    private static let formatID = "co.gitwork.post.recipe"
-    private static let formatVersion = "1"
+    private nonisolated static let formatID = "co.gitwork.post.recipe"
+    private nonisolated static let formatVersion = "1"
 
     private var input: PHContentEditingInput?
     private var model: EditorModel?
