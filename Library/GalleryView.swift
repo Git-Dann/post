@@ -21,6 +21,8 @@ struct GalleryView: View {
 
     @State private var pickerItem: PhotosPickerItem?
     @State private var session: EditorSession?
+    @State private var showSettings = false
+    @AppStorage("removeLocationOnExport") private var removeLocation = false
 
     private let columns = [GridItem(.adaptive(minimum: 110), spacing: Theme.Space.m)]
 
@@ -36,6 +38,16 @@ struct GalleryView: View {
             }
             .navigationTitle("Post")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { showSettings = true } label: {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 17, weight: .semibold))
+                            .frame(width: 44, height: 44)
+                            .glassEffect(.regular.interactive(), in: .circle)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Settings")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     PhotosPicker(selection: $pickerItem, matching: .images, photoLibrary: .shared()) {
                         Image(systemName: "plus")
@@ -45,6 +57,9 @@ struct GalleryView: View {
                     }
                 }
             }
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
         }
         .fullScreenCover(item: $session) { session in
             EditorView(
@@ -66,6 +81,9 @@ struct GalleryView: View {
             }
             if args.contains("--open-sample-editor") {
                 openSample()
+            }
+            if args.contains("--open-settings") {
+                showSettings = true
             }
             #endif
         }
@@ -146,7 +164,9 @@ struct GalleryView: View {
         { state in
             guard let data = model.originalData else { return nil }
             let exporter = ImageExporter()
-            guard let output = try? await exporter.export(imageData: data, state: state, format: .heic) else {
+            guard let output = try? await exporter.export(
+                imageData: data, state: state, format: .heic, stripLocation: removeLocation
+            ) else {
                 return nil
             }
             let url = FileManager.default.temporaryDirectory
