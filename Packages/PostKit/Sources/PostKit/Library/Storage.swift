@@ -66,6 +66,18 @@ public extension UserDefaults {
     nonisolated(unsafe) static let postShared = UserDefaults(suiteName: Storage.appGroupID) ?? .standard
 }
 
+/// iCloud sync preference, read at container-open time. Shared via the App Group so the app and the
+/// extensions agree on whether to open the CloudKit-backed store. Defaults OFF (privacy-first opt-in).
+public nonisolated enum SyncPrefs {
+    public static let iCloudEnabledKey = "iCloudSyncEnabled"
+
+    /// The CloudKit container backing the private database. Only used when sync is enabled AND the
+    /// matching entitlement is provisioned (see project.yml); otherwise the store stays local.
+    public static let cloudContainerID = "iCloud.co.gitwork.post"
+
+    public static var iCloudEnabled: Bool { UserDefaults.postShared.bool(forKey: iCloudEnabledKey) }
+}
+
 /// Export preferences shared across the app, extensions and the Shortcuts intent. `nonisolated`
 /// (pure UserDefaults reads) so the App Intent and extensions can read them off the main actor.
 public nonisolated enum ExportPrefs {

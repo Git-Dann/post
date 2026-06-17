@@ -51,6 +51,17 @@ targets:
       properties:
         com.apple.security.application-groups:
           - group.co.gitwork.post
+        # iCloud sync (opt-in, off by default). The code is ready; uncomment these THREE keys,
+        # create the "iCloud.co.gitwork.post" CloudKit container in the Apple Developer portal,
+        # provision it on your signing profile, then `xcodegen generate`. Left commented so the
+        # default build installs on-device without iCloud provisioning (keeping all other QA
+        # unblocked). When enabled, also uncomment UIBackgroundModes below for push-driven sync.
+        # com.apple.developer.icloud-container-identifiers:
+        #   - iCloud.co.gitwork.post
+        # com.apple.developer.icloud-services:
+        #   - CloudKit
+        # com.apple.developer.ubiquity-container-identifiers:
+        #   - iCloud.co.gitwork.post
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: co.gitwork.post
@@ -72,6 +83,8 @@ targets:
         # lets TestFlight/App Store builds skip the "missing compliance" prompt.
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.photography
+        # For iCloud sync, uncomment to let CloudKit push remote changes in the background:
+        # INFOPLIST_KEY_UIBackgroundModes: remote-notification
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
 

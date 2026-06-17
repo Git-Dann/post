@@ -307,7 +307,7 @@ struct GalleryView: View {
     }
 
     private func open(_ project: Project) {
-        guard let data = Storage.readOriginal(fileName: project.originalFileName),
+        guard let data = ProjectStore.originalData(for: project),
               let loaded = ImageLoader.makeLoaded(from: data) else {
             loadError = true   // original missing/corrupt/locked — don't fail silently
             return
@@ -320,7 +320,7 @@ struct GalleryView: View {
     /// Apply the copied edits to a project, re-rendering its thumbnail to match.
     private func pasteEdits(to project: Project) {
         guard let recipe = copiedRecipe,
-              let data = Storage.readOriginal(fileName: project.originalFileName),
+              let data = ProjectStore.originalData(for: project),
               let loaded = ImageLoader.makeLoaded(from: data) else { return }
         let model = EditorModel(source: loaded.preview, originalData: data, previewScale: loaded.previewScale)
         model.load(recipe: recipe)
@@ -398,7 +398,7 @@ struct GalleryView: View {
         Task {
             var urls: [URL] = []
             for project in chosen {
-                guard let data = Storage.readOriginal(fileName: project.originalFileName) else { continue }
+                guard let data = ProjectStore.originalData(for: project) else { continue }
                 let recipe = ProjectStore.recipe(for: project)
                 let exporter = ImageExporter()
                 if let out = try? await exporter.export(
@@ -416,7 +416,7 @@ struct GalleryView: View {
     }
 
     private func showInfo(for project: Project) {
-        guard let data = Storage.readOriginal(fileName: project.originalFileName) else { return }
+        guard let data = ProjectStore.originalData(for: project) else { return }
         infoSheet = InfoSheet(rows: ImageLoader.metadata(from: data))
     }
 

@@ -1,33 +1,45 @@
 import Foundation
 import SwiftData
 
-/// A re-editable project: the original image lives on disk (in the shared App Group container),
-/// and the non-destructive recipe is stored as encoded `EditState` JSON. Lives in PostKit so the
-/// app and both extensions share one persistence model.
+/// A re-editable project: the non-destructive recipe is stored as encoded `EditState` JSON, and the
+/// original image lives either on disk (in the shared App Group container, `originalFileName`) or —
+/// when iCloud sync is enabled — inside the store as an external-storage blob (`originalData`, which
+/// SwiftData mirrors to a CKAsset). Lives in PostKit so the app and both extensions share one model.
+///
+/// Every property is optional or carries an inline default so the schema is CloudKit-compatible
+/// (CloudKit forbids required attributes and unique constraints). All changes here are additive, so
+/// existing local stores migrate with SwiftData's lightweight path.
 @Model
 public final class Project {
-    public var id: UUID
-    public var createdAt: Date
-    public var modifiedAt: Date
+    public var id: UUID = UUID()
+    public var createdAt: Date = Date.now
+    public var modifiedAt: Date = Date.now
 
-    /// File name (within the originals directory) of the source image.
-    public var originalFileName: String
+    /// File name (within the originals directory) of the source image. Empty when the original is
+    /// kept in-store (`originalData`) instead — see `ProjectStore.originalData(for:)`.
+    public var originalFileName: String = ""
+
+    /// Original image bytes stored inside the model (external storage). Used when iCloud sync is on
+    /// so the original rides along as a CKAsset; `nil` for disk-backed (sync-off) projects.
+    @Attribute(.externalStorage) public var originalData: Data?
 
     /// Encoded `EditState` recipe (kept as `Data` so the model stays decoupled and migrates cleanly).
-    public var recipeData: Data
+    public var recipeData: Data = Data()
 
     /// Small JPEG thumbnail for the gallery grid.
     @Attribute(.externalStorage) public var thumbnailData: Data?
 
     public init(
         id: UUID = UUID(),
-        originalFileName: String,
+        originalFileName: String = "",
+        originalData: Data? = nil,
         recipeData: Data = Data(),
         thumbnailData: Data? = nil,
         createdAt: Date = .now
     ) {
         self.id = id
         self.originalFileName = originalFileName
+        self.originalData = originalData
         self.recipeData = recipeData
         self.thumbnailData = thumbnailData
         self.createdAt = createdAt

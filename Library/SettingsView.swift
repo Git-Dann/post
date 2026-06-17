@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import Photos
 import UIKit
 import PostKit
@@ -12,7 +13,10 @@ struct SettingsView: View {
     @AppStorage(ExportPrefs.maxDimensionKey, store: .postShared) private var exportMaxDimension = 0.0
     @AppStorage("soundEffectsEnabled") private var soundEnabled = false
     @AppStorage(AccentChoice.storageKey) private var accentRaw = AccentChoice.amber.rawValue
+    @AppStorage(SyncPrefs.iCloudEnabledKey, store: .postShared) private var iCloudSync = false
     @State private var photoStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+    @State private var syncJustChanged = false
+    @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
     private var version: String {
@@ -29,6 +33,7 @@ struct SettingsView: View {
                         promise
                         appearance
                         photoAccess
+                        iCloudSection
                         exportFormatSection
                         exportOptions
                         Text(version)
@@ -163,6 +168,51 @@ struct SettingsView: View {
             Task { photoStatus = await PHPhotoLibrary.requestAuthorization(for: .readWrite) }
         } else if let url = URL(string: UIApplication.openSettingsURLString) {
             UIApplication.shared.open(url)
+        }
+    }
+
+    private var iCloudSection: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            Toggle(isOn: $iCloudSync) {
+                HStack(spacing: Theme.Space.m) {
+                    Image(systemName: "icloud")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Theme.accent)
+                        .frame(width: 26)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Sync with iCloud")
+                            .font(.subheadline.weight(.medium))
+                        Text("Keep your library on all your devices, through your own private iCloud.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .tint(Theme.accent)
+
+            if syncJustChanged {
+                Text(iCloudSync
+                     ? "Quit and reopen Post to start syncing."
+                     : "Quit and reopen Post to stop syncing.")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(Theme.accent)
+                    .transition(.opacity)
+            } else {
+                Text("Private by design: photos sync only through your iCloud account — we never see them, and there are still no accounts or servers of ours.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Theme.Space.l)
+        .glassEffect(in: .rect(cornerRadius: Theme.Radius.card))
+        .onChange(of: iCloudSync) { _, enabled in
+            if enabled {
+                // Pull disk-backed originals into the store now so they're ready to mirror to iCloud
+                // when the CloudKit-backed container opens on next launch. Non-destructive.
+                ProjectStore.migrateOriginalsIntoStore(in: modelContext)
+            }
+            withAnimation(.snappy) { syncJustChanged = true }
         }
     }
 
