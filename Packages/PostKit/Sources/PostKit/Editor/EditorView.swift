@@ -22,6 +22,9 @@ public struct EditorView: View {
     @State private var zoomOffset: CGSize = .zero
     @State private var committedOffset: CGSize = .zero
     @State private var fitSize: CGSize = .zero
+    @State private var zoomGestureActive = false
+    @State private var inspectTile: CGImage?     // crisp full-res tile shown when settled & zoomed
+    @State private var tileTask: Task<Void, Never>?
     @State private var showInfo = false
     @State private var celebrate = false
     @State private var donePressed = false
@@ -30,6 +33,7 @@ public struct EditorView: View {
     @Namespace private var infoGlass
     @AppStorage("soundEffectsEnabled") private var soundEnabled = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.displayScale) private var displayScale
 
     /// - Parameters:
     ///   - exporter: produces a shareable file URL for the given recipe (full-res export),
@@ -132,21 +136,32 @@ public struct EditorView: View {
             if model.isCropping {
                 CropCanvas(model: model)
             } else {
-                MetalImageView(image: isComparing ? model.source : model.displayImage)
-                    .background(   // measure the fit size (unscaled) for pan clamping
-                        GeometryReader { geo in
-                            Color.clear
-                                .onAppear { fitSize = geo.size }
-                                .onChange(of: geo.size) { _, s in fitSize = s }
-                        }
-                    )
-                    .scaleEffect(zoomScale)
-                    .offset(zoomOffset)
-                    .gesture(inspectGesture)
+                ZStack {
+                    MetalImageView(image: isComparing ? model.source : model.displayImage)
+                        .scaleEffect(zoomScale)
+                        .offset(zoomOffset)
+                    // Once a zoom settles, swap in a crisp full-res tile of the visible region for
+                    // true pixel-peeping; it sits on top of (and matches) the scaled preview.
+                    if let inspectTile, zoomScale > 1, !zoomGestureActive {
+                        Image(decorative: inspectTile, scale: displayScale)
+                            .resizable()
+                            .scaledToFill()
+                            .allowsHitTesting(false)
+                    }
+                }
+                .background(   // measure the fit size (unscaled) for pan clamping + tile mapping
+                    GeometryReader { geo in
+                        Color.clear
+                            .onAppear { fitSize = geo.size }
+                            .onChange(of: geo.size) { _, s in fitSize = s }
+                    }
+                )
+                .gesture(inspectGesture)
             }
         }
         .onChange(of: model.isCropping) { _, _ in resetZoom(animated: false) }
         .onChange(of: model.selectedTool) { _, _ in resetZoom(animated: false) }
+        .onChange(of: model.state) { _, _ in inspectTile = nil; scheduleInspectTile() }
         // Tap the photo to compare against the original (a sticky toggle). This catcher sits BELOW
         // the dial/controls overlay (declared earlier in the chain), so a tap on the dial scrubs and
         // never flips the comparison — and grabbing the dial clears it instantly (see the dial's
@@ -236,25 +251,57 @@ public struct EditorView: View {
         SimultaneousGesture(
             MagnifyGesture()
                 .onChanged { v in
+                    zoomGestureActive = true
+                    isComparing = false       // zooming exits compare so the tile can't mismatch
+                    inspectTile = nil          // show the live (scaled) preview while interacting
                     zoomScale = min(max(committedScale * v.magnification, 1), 4)
                     zoomOffset = clampedOffset(committedOffset)
                 }
                 .onEnded { _ in
+                    zoomGestureActive = false
                     if zoomScale <= 1.01 {
                         resetZoom(animated: true)
                     } else {
                         committedScale = zoomScale
                         committedOffset = zoomOffset
+                        scheduleInspectTile()
                     }
                 },
             DragGesture()
                 .onChanged { v in
                     guard zoomScale > 1 else { return }   // panning only makes sense when zoomed in
+                    zoomGestureActive = true
+                    inspectTile = nil
                     zoomOffset = clampedOffset(CGSize(width: committedOffset.width + v.translation.width,
                                                       height: committedOffset.height + v.translation.height))
                 }
-                .onEnded { _ in committedOffset = zoomOffset }
+                .onEnded { _ in
+                    guard zoomScale > 1 else { return }
+                    committedOffset = zoomOffset
+                    zoomGestureActive = false
+                    scheduleInspectTile()
+                }
         )
+    }
+
+    /// Debounced: render the crisp full-res tile a beat after the zoom/pan settles (or after an
+    /// edit), then fade it in. Cancels in flight if anything changes again.
+    private func scheduleInspectTile() {
+        tileTask?.cancel()
+        guard zoomScale > 1, !zoomGestureActive, fitSize.width > 0 else { return }
+        let scale = displayScale
+        tileTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(110))
+            guard !Task.isCancelled, zoomScale > 1, !zoomGestureActive, fitSize.width > 0 else { return }
+            let z = zoomScale, w = fitSize.width, h = fitSize.height
+            let half = 1 / (2 * z)
+            let unit = CGRect(x: 0.5 - zoomOffset.width / (z * w) - half,
+                              y: 0.5 - zoomOffset.height / (z * h) - half,
+                              width: 1 / z, height: 1 / z)
+            if let cg = model.inspectTile(unitRect: unit, pixelWidth: w * scale) {
+                withAnimation(.easeOut(duration: 0.15)) { inspectTile = cg }
+            }
+        }
     }
 
     /// Keep the panned image covering the frame — no empty gaps at the edges.
@@ -266,6 +313,8 @@ public struct EditorView: View {
     }
 
     private func resetZoom(animated: Bool) {
+        tileTask?.cancel()
+        inspectTile = nil
         let apply = { zoomScale = 1; committedScale = 1; zoomOffset = .zero; committedOffset = .zero }
         if animated && !reduceMotion {
             withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) { apply() }

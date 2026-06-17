@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreImage
+import Metal
 import Observation
 
 /// The editor's single source of truth. Owns the live `EditState`, recomputes the displayed
@@ -301,6 +302,53 @@ public final class EditorModel: Identifiable {
             of: small,
             colorSpace: CGColorSpaceCreateDeviceRGB(),
             options: [:]
+        )
+    }
+
+    // MARK: Pinch-to-inspect (full-resolution tile)
+
+    private var fullSourceCache: CIImage?
+    /// GPU-backed so a full-res region renders fast (a software context would stutter on big photos).
+    private static let inspectContext: CIContext = {
+        if let device = MTLCreateSystemDefaultDevice() {
+            return CIContext(mtlDevice: device, options: [.cacheIntermediates: false])
+        }
+        return CIContext(options: [.cacheIntermediates: false])
+    }()
+    private static let inspectColorSpace = CGColorSpace(name: CGColorSpace.displayP3) ?? CGColorSpaceCreateDeviceRGB()
+
+    /// Full-resolution source, decoded once and cached. Falls back to the preview source for
+    /// synthetic/dev images that have no original data (still works, just not truly full-res).
+    private func fullSource() -> CIImage {
+        if let fullSourceCache { return fullSourceCache }
+        if let data = originalData, let img = ImageLoader.fullImage(from: data) {
+            fullSourceCache = img
+            return img
+        }
+        return source
+    }
+
+    /// Render a crisp tile of the visible region at full source resolution — true pixel-peeping for
+    /// the pinch-to-inspect zoom. `unitRect` is the visible region in normalized, top-left-origin
+    /// coordinates (0…1); `pixelWidth` is the desired output width in device pixels. Core Image only
+    /// processes the requested region (plus filter support), so this stays cheap even for huge photos.
+    public func inspectTile(unitRect: CGRect, pixelWidth: CGFloat) -> CGImage? {
+        let edited = FilterPipeline.makeImage(source: fullSource(), state: state, grainScale: 1)
+        let e = edited.extent
+        guard !e.isInfinite, !e.isNull, !e.isEmpty, pixelWidth > 0 else { return nil }
+        // Map the top-left-origin unit rect onto Core Image's bottom-left extent.
+        let region = CGRect(
+            x: e.minX + unitRect.minX * e.width,
+            y: e.maxY - unitRect.maxY * e.height,
+            width: unitRect.width * e.width,
+            height: unitRect.height * e.height
+        ).intersection(e)
+        guard !region.isNull, region.width > 1, region.height > 1 else { return nil }
+        let f = max(0.01, pixelWidth / region.width)   // scale the region to the on-screen pixel size
+        let scaled = edited.transformed(by: CGAffineTransform(scaleX: f, y: f))
+        let outRect = region.applying(CGAffineTransform(scaleX: f, y: f))
+        return Self.inspectContext.createCGImage(
+            scaled, from: outRect, format: .RGBA8, colorSpace: Self.inspectColorSpace
         )
     }
 
