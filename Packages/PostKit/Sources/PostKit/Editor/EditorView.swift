@@ -16,6 +16,12 @@ public struct EditorView: View {
     @State private var shareItem: ShareItem?
     @State private var isExporting = false
     @State private var isComparing = false
+    // Pinch-to-inspect: zoom into the preview to check detail/grain. View-only — never touches the recipe.
+    @State private var zoomScale: CGFloat = 1
+    @State private var committedScale: CGFloat = 1
+    @State private var zoomOffset: CGSize = .zero
+    @State private var committedOffset: CGSize = .zero
+    @State private var fitSize: CGSize = .zero
     @State private var showInfo = false
     @State private var celebrate = false
     @State private var donePressed = false
@@ -127,14 +133,27 @@ public struct EditorView: View {
                 CropCanvas(model: model)
             } else {
                 MetalImageView(image: isComparing ? model.source : model.displayImage)
+                    .background(   // measure the fit size (unscaled) for pan clamping
+                        GeometryReader { geo in
+                            Color.clear
+                                .onAppear { fitSize = geo.size }
+                                .onChange(of: geo.size) { _, s in fitSize = s }
+                        }
+                    )
+                    .scaleEffect(zoomScale)
+                    .offset(zoomOffset)
+                    .gesture(inspectGesture)
             }
         }
+        .onChange(of: model.isCropping) { _, _ in resetZoom(animated: false) }
+        .onChange(of: model.selectedTool) { _, _ in resetZoom(animated: false) }
         // Tap the photo to compare against the original (a sticky toggle). This catcher sits BELOW
         // the dial/controls overlay (declared earlier in the chain), so a tap on the dial scrubs and
         // never flips the comparison — and grabbing the dial clears it instantly (see the dial's
         // onBegin). The (i) and aspect controls are layered above too, so they win in their corners.
         .overlay {
-            if !model.isCropping {
+            // Only while at fit — when zoomed in, the catcher steps aside so pan/pinch own the photo.
+            if !model.isCropping && zoomScale == 1 {
                 Color.clear
                     .contentShape(Rectangle())
                     .onTapGesture {
@@ -207,6 +226,52 @@ public struct EditorView: View {
     private func chooseAspect(_ ratio: Double?) {
         model.setCropAspect(ratio)
         Haptics.selection()
+    }
+
+    // MARK: Pinch-to-inspect
+
+    /// Pinch to zoom the preview up to 4× and two-finger / one-finger drag to pan while zoomed.
+    /// Purely a viewing aid (never mutates the recipe); springs back to fit when you pinch below 1×.
+    private var inspectGesture: some Gesture {
+        SimultaneousGesture(
+            MagnifyGesture()
+                .onChanged { v in
+                    zoomScale = min(max(committedScale * v.magnification, 1), 4)
+                    zoomOffset = clampedOffset(committedOffset)
+                }
+                .onEnded { _ in
+                    if zoomScale <= 1.01 {
+                        resetZoom(animated: true)
+                    } else {
+                        committedScale = zoomScale
+                        committedOffset = zoomOffset
+                    }
+                },
+            DragGesture()
+                .onChanged { v in
+                    guard zoomScale > 1 else { return }   // panning only makes sense when zoomed in
+                    zoomOffset = clampedOffset(CGSize(width: committedOffset.width + v.translation.width,
+                                                      height: committedOffset.height + v.translation.height))
+                }
+                .onEnded { _ in committedOffset = zoomOffset }
+        )
+    }
+
+    /// Keep the panned image covering the frame — no empty gaps at the edges.
+    private func clampedOffset(_ o: CGSize) -> CGSize {
+        let maxX = max(0, fitSize.width * (zoomScale - 1) / 2)
+        let maxY = max(0, fitSize.height * (zoomScale - 1) / 2)
+        return CGSize(width: min(max(o.width, -maxX), maxX),
+                      height: min(max(o.height, -maxY), maxY))
+    }
+
+    private func resetZoom(animated: Bool) {
+        let apply = { zoomScale = 1; committedScale = 1; zoomOffset = .zero; committedOffset = .zero }
+        if animated && !reduceMotion {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) { apply() }
+        } else {
+            apply()
+        }
     }
 
     /// The (i) button that morphs (Liquid Glass) into the metadata panel and back. Same
