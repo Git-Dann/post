@@ -51,6 +51,7 @@ struct GalleryView: View {
     @State private var infoSheet: InfoSheet?
     @State private var floatIcon = false
     @State private var loadError = false
+    @State private var saveFailed = false
     /// Edits copied from one project, ready to paste onto another.
     @State private var copiedRecipe: EditState?
     /// Multi-select mode + the chosen project IDs, for bulk actions.
@@ -101,6 +102,11 @@ struct GalleryView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text("This photo couldn't be loaded — it may have been removed or isn't downloaded from iCloud yet.")
+        }
+        .alert("Couldn't save to Photos", isPresented: $saveFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Post needs permission to add photos. You can turn it on in Settings › Photos.")
         }
         // Out-of-process picker: no photo-library permission needed, supports one or many, and is
         // the most private option — Post only ever sees the photos you pick. (Using `.shared()`
@@ -237,6 +243,9 @@ struct GalleryView: View {
                                         pasteEdits(to: project)
                                     }
                                 }
+                                Button("Save to Photos", systemImage: "square.and.arrow.down") {
+                                    saveToPhotos(project)
+                                }
                                 Button("Delete", systemImage: "trash", role: .destructive) {
                                     ProjectStore.delete(project, in: modelContext)
                                 }
@@ -365,7 +374,8 @@ struct GalleryView: View {
     private var selectionBar: some View {
         HStack(spacing: Theme.Space.xl) {
             if copiedRecipe != nil { barButton("doc.on.clipboard", "Paste") { bulkPaste() } }
-            barButton("square.and.arrow.up", "Share") { shareSelected() }
+            barButton("square.and.arrow.down", "Save") { bulkSave() }
+            barButton("square.and.arrow.up", "Export") { shareSelected() }
             barButton("trash", "Delete", tint: .red) { bulkDelete() }
         }
         .padding(.horizontal, Theme.Space.xl)
@@ -416,6 +426,43 @@ struct GalleryView: View {
         withAnimation(Theme.Motion.snappy) { exitSelection() }
     }
 
+    /// Render a project's saved recipe to encoded data using the user's export prefs.
+    private func exportData(for project: Project, using exporter: ImageExporter) async -> Data? {
+        guard let data = ProjectStore.originalData(for: project) else { return nil }
+        return try? await exporter.export(
+            imageData: data, state: ProjectStore.recipe(for: project),
+            format: ExportPrefs.format, quality: ExportPrefs.quality,
+            stripLocation: ExportPrefs.removeLocation, maxDimension: ExportPrefs.maxDimension)
+    }
+
+    /// Save the selected projects' edited images straight to the Photos library.
+    private func bulkSave() {
+        let chosen = selectedProjects()
+        Task {
+            let exporter = ImageExporter()
+            var saved = 0
+            for project in chosen {
+                if let out = await exportData(for: project, using: exporter),
+                   await PhotoLibrary.save(imageData: out) { saved += 1 }
+            }
+            if saved > 0 { Haptics.notify(.success) } else { saveFailed = true }
+            withAnimation(Theme.Motion.snappy) { exitSelection() }
+        }
+    }
+
+    /// Save a single project's edited image to the Photos library (from the card's long-press menu).
+    private func saveToPhotos(_ project: Project) {
+        Task {
+            let exporter = ImageExporter()
+            if let out = await exportData(for: project, using: exporter),
+               await PhotoLibrary.save(imageData: out) {
+                Haptics.notify(.success)
+            } else {
+                saveFailed = true
+            }
+        }
+    }
+
     private func shareSelected() {
         let chosen = selectedProjects()
         let format = ExportPrefs.format
@@ -423,12 +470,7 @@ struct GalleryView: View {
             var urls: [URL] = []
             let exporter = ImageExporter()   // one context for the whole batch, not one per photo
             for project in chosen {
-                guard let data = ProjectStore.originalData(for: project) else { continue }
-                let recipe = ProjectStore.recipe(for: project)
-                if let out = try? await exporter.export(
-                    imageData: data, state: recipe, format: format, quality: ExportPrefs.quality,
-                    stripLocation: ExportPrefs.removeLocation, maxDimension: ExportPrefs.maxDimension
-                ) {
+                if let out = await exportData(for: project, using: exporter) {
                     let url = exportURL(originalName: project.originalName, format: format)
                     if (try? out.write(to: url)) != nil { urls.append(url) }
                 }

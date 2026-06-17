@@ -71,6 +71,23 @@ enum PhotoLibrary {
         }.data
     }
 
+    /// Save edited image data into the user's Photos library (Recents / All Photos — not a separate
+    /// folder). Add-only: requests just the lightweight "add" permission, never full read access.
+    /// Returns false if the user declines or the write fails.
+    static func save(imageData: Data) async -> Bool {
+        var status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
+        if status == .notDetermined {
+            status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+        }
+        guard status == .authorized || status == .limited else { return false }
+        return await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
+            PHPhotoLibrary.shared().performChanges {
+                let request = PHAssetCreationRequest.forAsset()
+                request.addResource(with: .photo, data: imageData, options: nil)
+            } completionHandler: { success, _ in cont.resume(returning: success) }
+        }
+    }
+
     /// For limited access: let the user add more photos to the selection Post can see.
     static func presentAddMore() {
         guard let scene = UIApplication.shared.connectedScenes
