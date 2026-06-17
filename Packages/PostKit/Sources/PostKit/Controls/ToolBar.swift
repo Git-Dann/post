@@ -25,7 +25,7 @@ public struct ToolBarAction: Identifiable {
 /// edit show a small accent dot.
 public struct ToolBar: View {
     private let actions: [ToolBarAction]
-    private let selected: EditTool
+    private let selected: EditTool?
     private let tools: [EditTool]
     private let editedTools: Set<EditTool>
     /// When false (e.g. while a mode like Styles is active), no dial tool shows the selected
@@ -35,7 +35,7 @@ public struct ToolBar: View {
 
     public init(
         actions: [ToolBarAction] = [],
-        selected: EditTool,
+        selected: EditTool?,
         tools: [EditTool] = EditTool.dialTools,
         editedTools: Set<EditTool> = [],
         highlightSelection: Bool = true,

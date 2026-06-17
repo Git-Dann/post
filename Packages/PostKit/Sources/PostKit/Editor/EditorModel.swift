@@ -21,7 +21,8 @@ public final class EditorModel: Identifiable {
     public private(set) var state = EditState()
     public private(set) var displayImage: CIImage
 
-    public var selectedTool: EditTool = .brightness
+    /// Currently selected adjustment tool, or nil for a neutral state (no dial shown).
+    public var selectedTool: EditTool? = .brightness
     /// Whether the crop geometry overlay is presented.
     public var isCropping = false
 
@@ -136,6 +137,7 @@ public final class EditorModel: Identifiable {
         apply(crop: imageCrop, straighten: cropStraighten,
               quarterTurns: cropQuarterTurns, flipH: cropFlipH, flipV: cropFlipV)
         isCropping = false
+        selectedTool = nil   // finishing a crop shouldn't leave an adjustment tool active
     }
 
     public func cancelCrop() { isCropping = false }

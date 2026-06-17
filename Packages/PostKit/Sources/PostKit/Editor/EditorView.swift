@@ -246,8 +246,14 @@ public struct EditorView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private var hasBottomControls: Bool {
+        model.isCropping || showStyles || model.selectedTool != nil
+    }
+
     /// The dial (or styles strip) that lives inside the bottom of the image, over a scrim.
+    @ViewBuilder
     private var imageControls: some View {
+      if hasBottomControls {
         VStack(spacing: Theme.Space.s) {
             if model.isCropping {
                 // Crop uses the same dial slot — for straighten, like every other tool.
@@ -284,12 +290,12 @@ public struct EditorView: View {
                     }
                     .padding(.bottom, Theme.Space.s)
                 }
-            } else {
+            } else if let tool = model.selectedTool {
                 readout
                 HapticDial(
                     value: dialBinding,
-                    range: model.selectedTool.range,
-                    detent: model.selectedTool.detent,
+                    range: tool.range,
+                    detent: tool.detent,
                     soundEnabled: soundEnabled,
                     onBegin: { isAdjustingDial = true; isComparing = false; model.beginInteraction() },
                     onCommit: { isAdjustingDial = false; model.endInteraction() }
@@ -304,6 +310,7 @@ public struct EditorView: View {
             LinearGradient(colors: [.clear, .black.opacity(0.65)], startPoint: .top, endPoint: .bottom)
                 .allowsHitTesting(false)
         )
+      }
     }
 
     /// The X beside Done: dismisses the active style (→ carousel), closes the styles strip, or
@@ -321,10 +328,10 @@ public struct EditorView: View {
                 showStyles = false
             }
             .transition(.scale.combined(with: .opacity))
-        } else if model.value(of: model.selectedTool) != 0 {
+        } else if let tool = model.selectedTool, model.value(of: tool) != 0 {
             GlassIconButton("xmark") {
                 model.beginInteraction()
-                model.update(model.selectedTool, to: 0)
+                model.update(tool, to: 0)
                 model.endInteraction()
                 Haptics.impact(.rigid)
             }
@@ -450,11 +457,13 @@ public struct EditorView: View {
     // MARK: Crop chrome (rotate/flip where the tool chips sit; Done + X like the editor)
 
     private var cropToolStrip: some View {
+        // 54pt buttons + 10 vertical padding == the ToolBar's height, so the image doesn't shift
+        // size between the normal tools and crop.
         HStack(spacing: Theme.Space.l) {
-            GlassIconButton("rotate.left") { model.rotateQuarter(-1); Haptics.impact(.light) }
-            GlassIconButton("rotate.right") { model.rotateQuarter(1); Haptics.impact(.light) }
-            GlassIconButton("arrow.left.and.right.righttriangle.left.righttriangle.right") { model.toggleFlipH(); Haptics.impact(.light) }
-            GlassIconButton("arrow.up.and.down.righttriangle.up.righttriangle.down") { model.toggleFlipV(); Haptics.impact(.light) }
+            GlassIconButton("rotate.left", size: 54) { model.rotateQuarter(-1); Haptics.impact(.light) }
+            GlassIconButton("rotate.right", size: 54) { model.rotateQuarter(1); Haptics.impact(.light) }
+            GlassIconButton("arrow.left.and.right.righttriangle.left.righttriangle.right", size: 54) { model.toggleFlipH(); Haptics.impact(.light) }
+            GlassIconButton("arrow.up.and.down.righttriangle.up.righttriangle.down", size: 54) { model.toggleFlipV(); Haptics.impact(.light) }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
@@ -481,17 +490,17 @@ public struct EditorView: View {
 
     private var readout: some View {
         VStack(spacing: 2) {
-            Text(model.selectedTool.readout(in: model.state))
+            Text(model.selectedTool?.readout(in: model.state) ?? "")
                 .font(.system(size: 30, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .contentTransition(.numericText())
                 .foregroundStyle(.white)
-            Text(model.selectedTool.title)
+            Text(model.selectedTool?.title ?? "")
                 .font(.system(.subheadline, design: .rounded))
                 .foregroundStyle(.white.opacity(0.7))
         }
         .shadow(color: .black.opacity(0.4), radius: 4)
-        .animation(Theme.Motion.snappy, value: model.value(of: model.selectedTool))
+        .animation(Theme.Motion.snappy, value: model.selectedTool.map { model.value(of: $0) })
     }
 
     private func share() {
@@ -530,8 +539,8 @@ public struct EditorView: View {
 
     private var dialBinding: Binding<Double> {
         Binding(
-            get: { model.value(of: model.selectedTool) },
-            set: { model.update(model.selectedTool, to: $0) }
+            get: { model.selectedTool.map { model.value(of: $0) } ?? 0 },
+            set: { v in if let t = model.selectedTool { model.update(t, to: v) } }
         )
     }
 }
