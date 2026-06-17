@@ -34,6 +34,10 @@ public struct EditorView: View {
     @State private var inspectTile: CGImage?     // crisp full-res tile shown when settled & zoomed
     @State private var tileTask: Task<Void, Never>?
     @State private var showInfo = false
+    // Selective-scope reveal: a brief dim of the un-edited region when a region is chosen.
+    @State private var scopeRevealActive = false
+    @State private var scopeMaskImage: CGImage?
+    @State private var scopeRevealTask: Task<Void, Never>?
     @State private var celebrate = false
     @State private var donePressed = false
     @State private var isCommitting = false
@@ -233,6 +237,15 @@ public struct EditorView: View {
                 CropCanvas(model: model)
                     .transition(.opacity)
             }
+            // Selective reveal: when a region is chosen, briefly dim everything *outside* it so it's
+            // obvious what the edit affects. Same ZStack as the image, so it aligns to the pixels.
+            if scopeRevealActive, let scopeMaskImage, !model.isCropping {
+                Rectangle()
+                    .fill(.black.opacity(0.5))
+                    .mask(alignment: .center) { scopeVeilMask(scopeMaskImage) }
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
         }
         .background(   // measure the fit size (unscaled) for pan clamping + tile mapping
             GeometryReader { geo in
@@ -250,6 +263,10 @@ public struct EditorView: View {
         // it visually) so a scoped edit's silent fall-back to whole-photo isn't a mystery.
         .onChange(of: model.maskUnavailable) { _, unavailable in
             if unavailable, model.scope.isRegional { announce("No subject detected. Adjusting the whole photo.") }
+        }
+        // When the mask arrives after a region was already chosen, flash the selection then.
+        .onChange(of: model.subjectMaskReady) { _, ready in
+            if ready, model.scope.isRegional { revealScope() }
         }
         // Tap the photo to compare against the original (a sticky toggle). This catcher sits BELOW
         // the dial/controls overlay (declared earlier in the chain), so a tap on the dial scrubs and
@@ -287,8 +304,10 @@ public struct EditorView: View {
         }
         // (i) hidden while cropping so it doesn't crowd the corner handle.
         .overlay(alignment: .topLeading) { if !model.isCropping { infoMorph } }
-        // Aspect-ratio menu — top-right, taking the (i)'s place while cropping.
+        // Aspect-ratio menu — top-right while cropping; the scope chip takes the same corner while a
+        // tonal tool is active (the two modes never overlap).
         .overlay(alignment: .topTrailing) { if model.isCropping { aspectMenu } }
+        .overlay(alignment: .topTrailing) { if showsScopeChip { scopeChip } }
         .overlay(alignment: .top) {
             if isComparing && !showInfo {
                 GlassPill("Original")
@@ -552,7 +571,6 @@ public struct EditorView: View {
                     .padding(.bottom, Theme.Space.s)
                 }
             } else if let tool = model.selectedTool {
-                if tool.isScopeable { scopeChip }
                 readout
                 HapticDial(
                     value: dialBinding,
@@ -840,12 +858,19 @@ public struct EditorView: View {
         .padding(.horizontal, Theme.Space.l)
     }
 
-    /// The selective-scope chip shown above the readout while a tonal tool is active: tap to confine
-    /// the tonal/colour edit to the Subject or Background (on-device Vision), or keep it whole-photo.
-    /// Reuses the crop aspect-menu pattern so it stays out of the way until you reach for it.
+    /// Whether the selective-scope chip is shown — only while a tonal tool is active (finishing tools
+    /// and crop don't scope), and never over the styles strip.
+    private var showsScopeChip: Bool {
+        showsChrome && !model.isCropping && !showStyles && (model.selectedTool?.isScopeable ?? false)
+    }
+
+    /// The selective-scope chip, top-right (mirroring the crop aspect menu). Tap for a native menu of
+    /// Whole Photo / Subject / Background (on-device Vision). Subtle by default; accent-ringed and
+    /// labelled while a region is active, so it's obvious you're editing just part of the photo.
     private var scopeChip: some View {
         let regional = model.scope.isRegional
         let noSubject = model.maskUnavailable && regional && !model.isPreparingMask
+        let tint: Color = noSubject ? .orange : (regional ? Theme.accent : .white)
         return Menu {
             Picker("Adjust", selection: scopeBinding) {
                 ForEach(SelectiveScope.allCases, id: \.self) { s in
@@ -853,27 +878,44 @@ public struct EditorView: View {
                 }
             }
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: 6) {
                 if model.isPreparingMask {
-                    ProgressView().controlSize(.mini).tint(.white)
+                    ProgressView().controlSize(.mini).tint(tint)
                 } else {
-                    Image(systemName: noSubject ? "exclamationmark.triangle" : model.scope.systemImage)
-                        .font(.system(size: 11, weight: .semibold))
+                    Image(systemName: noSubject ? "exclamationmark.triangle.fill" : model.scope.systemImage)
+                        .font(.system(size: 13, weight: .semibold))
                 }
                 Text(noSubject ? "No subject" : model.scope.shortTitle)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).opacity(0.55)
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
             }
-            .foregroundStyle(noSubject ? .orange : (regional ? Theme.accent : .white.opacity(0.85)))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .foregroundStyle(tint)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .glassEffect(.regular.interactive(), in: .capsule)
+        .overlay {   // an accent ring makes "a region is active" unmistakable
+            if regional && !noSubject {
+                Capsule().strokeBorder(Theme.accent, lineWidth: 1.5)
+            }
+        }
+        .padding(Theme.Space.m)
+        .animation(reduceMotion ? nil : Theme.Motion.snappy, value: model.scope)
         .accessibilityLabel("Adjustment area")
         .accessibilityValue(model.scope.title)
         .accessibilityHint("Confines tonal edits to the subject or background")
+    }
+
+    /// Masks the dim veil so it covers only the region NOT being edited (subject scope → dim the
+    /// background; background scope → dim the subject). The mask image is white on the subject.
+    @ViewBuilder
+    private func scopeVeilMask(_ cg: CGImage) -> some View {
+        let img = Image(decorative: cg, scale: displayScale).resizable()
+        switch model.scope {
+        case .subject: img.colorInvert().luminanceToAlpha()   // veil where mask is dark (background)
+        default:       img.luminanceToAlpha()                 // veil where mask is light (subject)
+        }
     }
 
     private var scopeBinding: Binding<SelectiveScope> {
@@ -883,8 +925,23 @@ public struct EditorView: View {
                 model.setScope($0)
                 Haptics.selection()
                 announce($0.announcement)
+                revealScope()
             }
         )
+    }
+
+    /// Flash the selection: dim the un-edited region for a beat, then fade. No-op for whole-photo or
+    /// while the mask is still computing (the async path re-triggers this once it's ready).
+    private func revealScope() {
+        guard model.scope.isRegional, let cg = model.scopeMaskDisplayImage() else { return }
+        scopeMaskImage = cg
+        scopeRevealTask?.cancel()
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) { scopeRevealActive = true }
+        scopeRevealTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(1200))
+            guard !Task.isCancelled else { return }
+            withAnimation(reduceMotion ? nil : .easeIn(duration: 0.5)) { scopeRevealActive = false }
+        }
     }
 
     /// Speak a state change to VoiceOver (a no-op when VoiceOver is off). Used for changes that

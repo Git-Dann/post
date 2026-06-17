@@ -107,8 +107,22 @@ public final class EditorModel: Identifiable {
     /// True once segmentation finished and found no subject — lets the UI explain the no-op.
     public private(set) var maskUnavailable = false
 
+    /// True once the subject mask is available, so the UI can flash a selection preview.
+    public var subjectMaskReady: Bool { subjectMask != nil }
+
     /// The current selective scope (mirrors `state.scope` for the view).
     public var scope: SelectiveScope { state.scope }
+
+    /// The subject mask aligned to the current geometry, rendered as a CGImage (white = subject),
+    /// for a momentary on-screen "this is your selection" reveal. Computed on demand (the reveal is
+    /// brief), nil until segmentation finishes.
+    public func scopeMaskDisplayImage() -> CGImage? {
+        guard let subjectMask else { return nil }
+        let geoMask = FilterPipeline.applyGeometry(subjectMask, state)
+        let e = geoMask.extent
+        guard !e.isInfinite, !e.isNull, !e.isEmpty else { return nil }
+        return Self.inspectContext.createCGImage(geoMask, from: e)
+    }
 
     /// Change the selective scope. The first time a region is chosen this kicks off on-device
     /// subject segmentation; the preview re-renders (masked) as soon as the mask is ready.
