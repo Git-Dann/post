@@ -76,8 +76,10 @@ public struct EditorView: View {
             }
         }
         .statusBarHidden()
-        // Smooth, native relayout when the device rotates (snaps under Reduce Motion).
-        .animation(reduceMotion ? nil : Theme.Motion.settle, value: isLandscape)
+        // NB: deliberately no `.animation(value: isLandscape)` here. Animating the portrait⇄landscape
+        // swap cross-fades BOTH layout trees at once, and each carries its own dial/image — which
+        // showed as a brief "double". The system's own rotation animation already provides a clean
+        // transition with only one tree live, so we let it own the motion.
         // The editor dismisses only via its Done/Gallery buttons. Disabling interactive dismissal
         // stops the zoom-transition's pull/pinch-to-dismiss from hijacking the pinch-to-inspect
         // gesture (which was skewing the whole presentation away).
