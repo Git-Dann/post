@@ -27,9 +27,9 @@ public nonisolated enum SelectiveScope: String, Codable, Sendable, Equatable, Ca
 
     public var systemImage: String {
         switch self {
-        case .whole: "rectangle"
+        case .whole: "photo"
         case .subject: "person.and.background.dotted"
-        case .background: "person.crop.rectangle.badge.xmark"
+        case .background: "mountain.2"
         }
     }
 
