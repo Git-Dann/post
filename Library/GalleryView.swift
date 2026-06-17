@@ -37,6 +37,7 @@ struct GalleryView: View {
     @AppStorage("removeLocationOnExport") private var removeLocation = false
     @AppStorage("hasPrimedPhotoAccess") private var hasPrimedPhotoAccess = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var zoomNS
 
     private let columns = [GridItem(.adaptive(minimum: 110), spacing: Theme.Space.m)]
 
@@ -61,6 +62,8 @@ struct GalleryView: View {
                 onDone: { state in finish(session, state: state) },
                 onCancel: { self.session = nil }
             )
+            // Native zoom: the editor grows out of the tapped photo and pushes back to its slot.
+            .navigationTransition(.zoom(sourceID: session.project?.id ?? session.id, in: zoomNS))
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(item: $infoSheet) { sheet in MetadataView(rows: sheet.rows) }
@@ -142,6 +145,8 @@ struct GalleryView: View {
                 ForEach(projects) { project in
                     Button { open(project) } label: { ProjectCard(project: project) }
                         .buttonStyle(.plain)
+                        // Source for the native zoom transition into the editor and back.
+                        .matchedTransitionSource(id: project.id, in: zoomNS)
                         .contextMenu {
                             Button("Info", systemImage: "info.circle") { showInfo(for: project) }
                             Button("Delete", systemImage: "trash", role: .destructive) {
