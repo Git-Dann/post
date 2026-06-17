@@ -63,7 +63,9 @@ targets:
         INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: "Post saves your finished edits straight to your photo library."
         INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "Allow access so you can browse and import from your photo library inside Post. Your photos are read on-device only and never leave your device."
         INFOPLIST_KEY_NSCameraUsageDescription: "Snap a photo to edit right away."
-        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        # iOS 27 expects all orientations unless the app requires full screen (which would kill iPad
+        # multitasking / Stage Manager). Our layout is fully adaptive, so support all four.
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_UIStatusBarStyle: UIStatusBarStyleLightContent
         # Export compliance: the app uses only Apple's standard/exempt encryption
         # (HTTPS), so no annual self-classification doc is required — declaring this

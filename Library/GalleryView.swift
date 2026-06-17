@@ -146,7 +146,10 @@ struct GalleryView: View {
     }
 
     private var grid: some View {
-        ScrollView {
+        // Capture the main-actor value into a local so the (Sendable) scrollTransition closure
+        // doesn't reference the actor-isolated environment property directly.
+        let reduceMotion = reduceMotion
+        return ScrollView {
             LazyVGrid(columns: columns, spacing: Theme.Space.m) {
                 ForEach(projects) { project in
                     Button { open(project) } label: { ProjectCard(project: project) }
