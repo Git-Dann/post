@@ -376,30 +376,38 @@ public struct EditorView: View {
         // Native translucent Liquid Glass — its own press gives the touch-glow.
         .buttonStyle(.glass)
         .tint(.white)
-        // Very light "save" touch: a gentle pop + a small sparkle above the button.
-        .scaleEffect(doneFlourish ? 1.035 : 1)
-        .overlay(alignment: .top) {
-            if doneFlourish {
-                Image(systemName: "sparkle")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Theme.accent)
-                    .offset(y: -14)
-                    .transition(.scale(scale: 0.4).combined(with: .opacity))
-                    .allowsHitTesting(false)
-            }
-        }
+        // Light "save" touch: a gentle pop, a soft accent glow, and a small sparkle cluster.
+        .scaleEffect(doneFlourish ? 1.04 : 1)
+        .shadow(color: Theme.accent.opacity(doneFlourish ? 0.45 : 0), radius: doneFlourish ? 14 : 0)
+        .overlay { doneSparkles }
         .frame(maxWidth: .infinity)
         .overlay(alignment: .trailing) { resetButton }
         .padding(.horizontal, Theme.Space.l)
     }
 
-    /// Done is effectively "save" — a light pop + sparkle, then hand the recipe back.
+    /// A small twinkle of sparkles around the Done button when it's tapped.
+    @ViewBuilder
+    private var doneSparkles: some View {
+        if doneFlourish {
+            ZStack {
+                Image(systemName: "sparkle").font(.system(size: 13, weight: .semibold)).offset(x: -34, y: -15)
+                Image(systemName: "sparkle").font(.system(size: 9, weight: .semibold)).offset(x: 30, y: -18)
+                Image(systemName: "sparkle").font(.system(size: 11, weight: .semibold)).offset(x: 44, y: 8)
+            }
+            .foregroundStyle(Theme.accent)
+            .symbolEffect(.bounce, value: doneFlourish)
+            .transition(.scale(scale: 0.3).combined(with: .opacity))
+            .allowsHitTesting(false)
+        }
+    }
+
+    /// Done is effectively "save" — a light pop + soft glow + sparkle, then hand the recipe back.
     private func commitDone() {
         Haptics.impact(.soft)
         guard !reduceMotion else { onDone(model.state); return }
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { doneFlourish = true }
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.5)) { doneFlourish = true }
         Task {
-            try? await Task.sleep(for: .milliseconds(180))
+            try? await Task.sleep(for: .milliseconds(260))
             onDone(model.state)
         }
     }
