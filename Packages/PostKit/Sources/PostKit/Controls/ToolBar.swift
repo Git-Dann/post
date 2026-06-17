@@ -103,21 +103,20 @@ public struct ToolBar: View {
                 .overlay(
                     Image(systemName: action.systemImage)
                         .font(.system(size: 19, weight: .semibold))
-                        .foregroundStyle(action.tinted ? .black : .white)
+                        .foregroundStyle(iconColor(active: action.tinted, edited: action.showsDot))
                 )
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .glassEffect(
-            action.tinted ? .regular.tint(Theme.accent.opacity(0.78)).interactive() : .regular.interactive(),
-            in: .circle
-        )
-        .overlay(alignment: .topTrailing) { editDot(action.showsDot) }
+        .glassEffect(chipGlass(active: action.tinted, edited: action.showsDot), in: .circle)
+        .animation(Theme.Motion.snappy, value: action.showsDot)
         .accessibilityLabel(action.title)
+        .accessibilityValue(action.showsDot ? "Edited" : "")
     }
 
     private func chip(_ tool: EditTool) -> some View {
         let isSelected = highlightSelection && tool == selected
+        let isEdited = editedTools.contains(tool)
         return Button {
             onSelect(tool)
         } label: {
@@ -126,33 +125,34 @@ public struct ToolBar: View {
                 .overlay(
                     Image(systemName: tool.systemImage)
                         .font(.system(size: 19, weight: .semibold))
-                        .foregroundStyle(isSelected ? .black : .white)
+                        .foregroundStyle(iconColor(active: isSelected, edited: isEdited))
                         .symbolEffect(.bounce, value: isSelected)
                 )
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .glassEffect(
-            isSelected ? .regular.tint(Theme.accent.opacity(0.78)).interactive() : .regular.interactive(),
-            in: .circle
-        )
+        .glassEffect(chipGlass(active: isSelected, edited: isEdited), in: .circle)
         .scaleEffect(isSelected ? 1.12 : 1)
         .animation(Theme.Motion.snappy, value: isSelected)
-        .overlay(alignment: .topTrailing) { editDot(editedTools.contains(tool)) }
+        .animation(Theme.Motion.snappy, value: isEdited)
         .accessibilityLabel(tool.title)
-        .accessibilityValue(editedTools.contains(tool) ? "Edited" : "")
+        .accessibilityValue(isEdited ? "Edited" : "")
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
-    @ViewBuilder
-    private func editDot(_ show: Bool) -> some View {
-        if show {
-            Circle()
-                .fill(Theme.accent)
-                .frame(width: 10, height: 10)
-                .overlay(Circle().strokeBorder(Theme.canvas, lineWidth: 2))
-                .offset(x: -3, y: 3)
-                .transition(.scale.combined(with: .opacity))
-        }
+    /// Three chip states, expressed purely through the native glass — no overlaid dot:
+    /// • active (selected tool / open mode) → a strong accent tint, the chip reads as "on";
+    /// • edited (has a non-zero adjustment) → a soft accent tint, so it glows quietly;
+    /// • idle → clear glass.
+    private func chipGlass(active: Bool, edited: Bool) -> Glass {
+        if active { return .regular.tint(Theme.accent.opacity(0.78)).interactive() }
+        if edited { return .regular.tint(Theme.accent.opacity(0.30)).interactive() }
+        return .regular.interactive()
+    }
+
+    private func iconColor(active: Bool, edited: Bool) -> Color {
+        if active { return .black }       // legible on the strong tint
+        if edited { return Theme.accent } // matches the soft tint
+        return .white
     }
 }

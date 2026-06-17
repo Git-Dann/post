@@ -147,6 +147,14 @@ public struct EditorView: View {
                     .allowsHitTesting(false)
             }
         }
+        // Tap anywhere on the image to dismiss the open info panel — the native way (no close button).
+        .overlay {
+            if showInfo {
+                Color.black.opacity(0.001)
+                    .contentShape(Rectangle())
+                    .onTapGesture { withAnimation(reduceMotion ? nil : .default) { showInfo = false } }
+            }
+        }
         // (i) hidden while cropping so it doesn't crowd the corner handle.
         .overlay(alignment: .topLeading) { if !model.isCropping { infoMorph } }
         // Aspect-ratio menu — top-right, taking the (i)'s place while cropping.
@@ -189,8 +197,9 @@ public struct EditorView: View {
     }
 
     /// The (i) button that morphs (Liquid Glass) into the metadata panel and back. Same
-    /// `glassEffectID` on both states inside a `GlassEffectContainer` does the morph; the X ends up
-    /// sitting where the (i) was.
+    /// `glassEffectID` on both states inside a `GlassEffectContainer` drives the morph. There's no
+    /// close button: the panel dismisses on tap (itself or anywhere on the image), the way the system
+    /// camera/settings panels do.
     private var infoMorph: some View {
         GlassEffectContainer {
             Group {
@@ -218,40 +227,38 @@ public struct EditorView: View {
         // a single driver (no competing .animation(value:)), so it doesn't step on close.
     }
 
-    /// Inline, top-level metadata (format, size, dimensions, date). The X sits top-left, over where
-    /// the (i) was.
+    /// Inline, top-level metadata (format, dimensions, size, date), laid out like the system camera
+    /// settings panel: uppercase secondary labels in a left column, values aligned beside them. No
+    /// close button — tap the panel (or anywhere on the image) to morph it back to the (i).
     private var metadataPanelContent: some View {
         let rows = model.originalData.map { ImageLoader.topLevelMetadata(from: $0) } ?? []
-        return VStack(alignment: .leading, spacing: Theme.Space.s) {
-            HStack {
-                Button {
-                    withAnimation(reduceMotion ? nil : .default) { showInfo = false }
-                } label: {
-                    Color.clear
-                        .frame(width: 30, height: 30)
-                        .overlay(Image(systemName: "xmark").font(.system(size: 14, weight: .bold)))
-                        .contentShape(Circle())
-                }
-                .buttonStyle(.plain)
-                Spacer()
-            }
+        return Group {
             if rows.isEmpty {
                 Text("No info available")
                     .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(.secondary)
             } else {
-                ForEach(rows) { row in
-                    HStack {
-                        Text(row.label).foregroundStyle(.white.opacity(0.7))
-                        Spacer()
-                        Text(row.value).fontWeight(.medium).foregroundStyle(.white)
+                Grid(alignment: .leading, horizontalSpacing: Theme.Space.l, verticalSpacing: Theme.Space.s) {
+                    ForEach(rows) { row in
+                        GridRow {
+                            Text(row.label.uppercased())
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            Text(row.value)
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(.primary)
+                                .gridColumnAlignment(.leading)
+                        }
                     }
-                    .font(.subheadline)
                 }
             }
         }
         .padding(Theme.Space.l)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .onTapGesture { withAnimation(reduceMotion ? nil : .default) { showInfo = false } }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Image info: " + rows.map { "\($0.label) \($0.value)" }.joined(separator: ", "))
+        .accessibilityHint("Tap to close")
     }
 
     private var hasBottomControls: Bool {

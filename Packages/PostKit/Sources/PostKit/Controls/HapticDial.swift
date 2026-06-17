@@ -19,7 +19,7 @@ public struct HapticDial: View {
     @State private var isScrolling = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private let pitch: CGFloat = 14   // points between ticks
+    private let pitch: CGFloat = 12   // points between ticks (a little tighter)
 
     public init(
         value: Binding<Double>,
@@ -112,11 +112,16 @@ public struct HapticDial: View {
     }
 
     private func tick(_ i: Int, height: CGFloat) -> some View {
-        let isMajor = i % 5 == 0
+        // Three tiers: 1s short, 5s a medium step, 10s the tall reference lines.
+        let isTen = i % 10 == 0
+        let isFive = i % 5 == 0
         let isZero = i == 0 && isBipolar
+        let lineHeight = height * (isTen ? 0.6 : isFive ? 0.44 : 0.3)
+        let lineWidth: CGFloat = isTen ? 2 : isFive ? 1.75 : 1.5
+        let opacity = isTen ? 0.55 : isFive ? 0.45 : 0.3
         return Capsule()
-            .fill(isZero ? Theme.accent : .white.opacity(isMajor ? 0.55 : 0.3))
-            .frame(width: isMajor ? 2 : 1.5, height: isMajor ? height * 0.6 : height * 0.3)
+            .fill(isZero ? Theme.accent : .white.opacity(opacity))
+            .frame(width: lineWidth, height: lineHeight)
             .frame(maxWidth: .infinity, maxHeight: .infinity)   // center the line within its pitch
     }
 

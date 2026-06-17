@@ -19,25 +19,23 @@ public struct MetadataView: View {
                     ContentUnavailableView("No metadata", systemImage: "info.circle")
                 } else {
                     ScrollView {
-                        VStack(spacing: 0) {
-                            ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                                HStack {
-                                    Text(row.label)
+                        // Uppercase secondary labels in a left column, values aligned beside them —
+                        // the system camera/settings-panel layout.
+                        Grid(alignment: .leading, horizontalSpacing: Theme.Space.l, verticalSpacing: Theme.Space.m) {
+                            ForEach(rows) { row in
+                                GridRow {
+                                    Text(row.label.uppercased())
+                                        .font(.caption.weight(.semibold))
                                         .foregroundStyle(.secondary)
-                                    Spacer()
                                     Text(row.value)
-                                        .fontWeight(.medium)
-                                        .multilineTextAlignment(.trailing)
-                                }
-                                .font(.subheadline)
-                                .padding(.vertical, Theme.Space.m)
-                                if index < rows.count - 1 {
-                                    Divider().overlay(.white.opacity(0.08))
+                                        .font(.subheadline.weight(.medium))
+                                        .foregroundStyle(.primary)
+                                        .gridColumnAlignment(.leading)
                                 }
                             }
                         }
-                        .padding(.horizontal, Theme.Space.l)
-                        .padding(.vertical, Theme.Space.s)
+                        .padding(Theme.Space.l)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .glassEffect(in: .rect(cornerRadius: Theme.Radius.card))
                         .padding(Theme.Space.l)
                     }
