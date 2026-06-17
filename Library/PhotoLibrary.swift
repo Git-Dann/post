@@ -72,14 +72,19 @@ enum PhotoLibrary {
     }
 
     /// The album Post files its exports into, so they're grouped (and easy to clear out en masse).
-    static let albumTitle = "Post"
+    nonisolated static let albumTitle = "Post"
 
     /// Save edited image data to Photos. Always lands in the main library (Recents / All Photos);
     /// when full access is granted it's also filed into a "Post" album so the user can find and
     /// manage their edits together. Add-only at minimum — never escalates to full access just to
     /// save (under add-only we can't read existing albums, so we skip the album to avoid duplicates).
     /// Returns false if the user declines or the write fails.
-    static func save(imageData: Data) async -> Bool {
+    /// `nonisolated` is essential: `PHPhotoLibrary.performChanges` runs the change/completion blocks
+    /// on its OWN background queue. If this method were MainActor-isolated (the enum is), those
+    /// closures would inherit MainActor isolation and Swift's runtime executor check would trap
+    /// (`dispatch_assert_queue` on com.apple.PHPhotoLibrary.transaction.high). The Photos APIs are
+    /// thread-safe, so we run the whole flow off the main actor.
+    nonisolated static func save(imageData: Data) async -> Bool {
         var status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
         if status == .notDetermined {
             status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
@@ -102,11 +107,12 @@ enum PhotoLibrary {
         }
     }
 
-    private struct AlbumBox: @unchecked Sendable { let album: PHAssetCollection? }
-    private final class IDBox: @unchecked Sendable { var id: String? }
+    nonisolated private struct AlbumBox: @unchecked Sendable { let album: PHAssetCollection? }
+    nonisolated private final class IDBox: @unchecked Sendable { var id: String? }
 
     /// Find the existing "Post" album, or create it. Requires full access (the caller checks).
-    private static func findOrCreateAlbum() async -> PHAssetCollection? {
+    /// `nonisolated` for the same reason as `save` — the creation runs on Photos' own queue.
+    nonisolated private static func findOrCreateAlbum() async -> PHAssetCollection? {
         let options = PHFetchOptions()
         options.predicate = NSPredicate(format: "title = %@", albumTitle)
         let existing = PHAssetCollection.fetchAssetCollections(with: .album, subtype: .albumRegular, options: options)
