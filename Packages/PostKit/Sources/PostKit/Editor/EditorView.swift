@@ -24,6 +24,9 @@ public struct EditorView: View {
     @State private var shareItem: ShareItem?
     @State private var isExporting = false
     @State private var isComparing = false
+    // Press-and-hold "peek" at the original (distinct from the sticky compare toggle).
+    @State private var comparePeek = false
+    @State private var comparePeekTask: Task<Void, Never>?
     // Pinch-to-inspect: zoom into the preview to check detail/grain. View-only — never touches the recipe.
     @State private var zoomScale: CGFloat = 1
     @State private var committedScale: CGFloat = 1
@@ -214,8 +217,11 @@ public struct EditorView: View {
     /// the original while comparing, otherwise the live edit.
     private var baseImage: CIImage {
         if model.isCropping { return model.cropDisplayImage }
-        return isComparing ? model.source : model.displayImage
+        return showingOriginal ? model.source : model.displayImage
     }
+
+    /// Show the untouched original — either the sticky compare toggle or a press-and-hold peek.
+    private var showingOriginal: Bool { isComparing || comparePeek }
 
     private var framedImage: some View {
         // ONE MetalImageView for every mode — its source switches, but the view (and its MTKView)
@@ -268,22 +274,8 @@ public struct EditorView: View {
         .onChange(of: model.subjectMaskReady) { _, ready in
             if ready, model.scope.isRegional { revealScope() }
         }
-        // Tap the photo to compare against the original (a sticky toggle). This catcher sits BELOW
-        // the dial/controls overlay (declared earlier in the chain), so a tap on the dial scrubs and
-        // never flips the comparison — and grabbing the dial clears it instantly (see the dial's
-        // onBegin). The (i) and aspect controls are layered above too, so they win in their corners.
-        .overlay {
-            // Only while at fit — when zoomed in, the catcher steps aside so pan/pinch own the photo.
-            if !model.isCropping && zoomScale == 1 {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        guard model.hasEdits, !showStyles, !showInfo else { return }
-                        withAnimation(Theme.Motion.snappy) { isComparing.toggle() }
-                        Haptics.impact(.soft)
-                    }
-            }
-        }
+        // Compare-to-original is now an explicit top-left control (tap to toggle, hold to peek) —
+        // see `compareButton`. The image itself no longer steals taps, so it never clashes.
         .overlay {
             if celebrate {
                 Image(systemName: "sparkles")
@@ -294,27 +286,21 @@ public struct EditorView: View {
                     .allowsHitTesting(false)
             }
         }
-        // Tap anywhere on the image to dismiss the open info panel — the native way (no close button).
-        .overlay {
-            if showInfo {
-                Color.black.opacity(0.001)
-                    .contentShape(Rectangle())
-                    .onTapGesture { withAnimation(reduceMotion ? nil : .default) { showInfo = false } }
-            }
+        // Top-left: compare-to-original (replaces the parked (i) — the gallery's long-press Info
+        // covers metadata). Tap toggles original on/off; press-and-hold peeks. Hidden with no edits.
+        .overlay(alignment: .topLeading) {
+            if !model.isCropping && model.hasEdits { compareButton }
         }
-        // (i) metadata panel parked for now — the gallery's long-press "Info" covers this. The
-        // infoMorph/metadata code stays below, ready to re-enable.
-        // .overlay(alignment: .topLeading) { if !model.isCropping { infoMorph } }
         // Aspect-ratio menu — top-right while cropping; the scope chip takes the same corner while a
         // tonal tool is active (the two modes never overlap).
         .overlay(alignment: .topTrailing) { if model.isCropping { aspectMenu } }
         .overlay(alignment: .topTrailing) { if showsScopeChip { scopeChip } }
         .overlay(alignment: .top) {
-            if isComparing && !showInfo {
+            if showingOriginal {
                 GlassPill("Original")
                     .padding(.top, Theme.Space.m)
                     .transition(.opacity.combined(with: .scale))
-                    .allowsHitTesting(false)   // tap passes through to the catcher to toggle back
+                    .allowsHitTesting(false)
             }
         }
         // Portrait: the dial overlays the image bottom (with a scrim). Landscape: it lives in the
@@ -329,7 +315,44 @@ public struct EditorView: View {
         .overlay { if model.isCropping { CropHandles(model: model) } }
     }
 
-    /// Aspect-ratio picker shown top-right while cropping (mirrors the (i) top-left).
+    /// Compare-to-original control, top-left. A quick tap toggles the original on/off (sticky); a
+    /// press-and-hold peeks at the original and returns on release. One gesture distinguishes the two
+    /// by press duration, so they never fight.
+    private var compareButton: some View {
+        let active = showingOriginal
+        return Color.clear
+            .frame(width: 38, height: 38)
+            .overlay(
+                Image(systemName: active ? "eye.fill" : "eye")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(active ? Theme.accent : .white)
+            )
+            .contentShape(Circle())
+            .glassEffect(.regular.interactive(), in: .circle)
+            .onLongPressGesture(minimumDuration: .infinity, maximumDistance: 40, perform: {}) { pressing in
+                if pressing {
+                    comparePeekTask?.cancel()
+                    comparePeekTask = Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(180))   // past this = a hold, not a tap
+                        guard !Task.isCancelled else { return }
+                        withAnimation(reduceMotion ? nil : Theme.Motion.snappy) { comparePeek = true }
+                    }
+                } else {
+                    comparePeekTask?.cancel()
+                    if comparePeek {
+                        withAnimation(reduceMotion ? nil : Theme.Motion.snappy) { comparePeek = false }
+                    } else {
+                        withAnimation(reduceMotion ? nil : Theme.Motion.snappy) { isComparing.toggle() }
+                        Haptics.impact(.soft)
+                    }
+                }
+            }
+            .padding(Theme.Space.m)
+            .accessibilityLabel(isComparing ? "Show edited" : "Show original")
+            .accessibilityHint("Tap to toggle, or touch and hold to peek at the original")
+    }
+
+    /// Aspect-ratio picker shown top-right while cropping (mirrors the scope chip top-right).
     private var aspectMenu: some View {
         Menu {
             Button("Free") { chooseAspect(nil) }
