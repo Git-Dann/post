@@ -19,15 +19,27 @@ enum PhotoLibrary {
         await PHPhotoLibrary.requestAuthorization(for: .readWrite)
     }
 
-    /// All image assets, newest first. (PHAsset isn't Sendable, so this stays on the main actor.)
-    static func fetchImageAssets() -> [PHAsset] {
+    /// The lazy fetch result of all image assets, newest first.
+    ///
+    /// `PHFetchResult` is database-backed: it loads each `PHAsset` only when indexed (`object(at:)`),
+    /// so the grid drives straight off it and we never materialize a 50k-element array on the main
+    /// actor (which is what made a large library hitch on open). The call itself just compiles the
+    /// query and touches no image data. (PHFetchResult/PHAsset aren't Sendable, so this stays on the
+    /// main actor — but it's now cheap.)
+    static func fetchImageResult() -> PHFetchResult<PHAsset> {
         let options = PHFetchOptions()
         options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
-        let result = PHAsset.fetchAssets(with: .image, options: options)
-        var assets: [PHAsset] = []
-        assets.reserveCapacity(result.count)
-        result.enumerateObjects { asset, _, _ in assets.append(asset) }
-        return assets
+        return PHAsset.fetchAssets(with: .image, options: options)
+    }
+
+    /// Resolve a handful of selected identifiers back to assets (preserving the user's tap order).
+    /// Fetches only the chosen assets — never the whole library.
+    static func assets(withIdentifiers ids: [String]) -> [PHAsset] {
+        guard !ids.isEmpty else { return [] }
+        let result = PHAsset.fetchAssets(withLocalIdentifiers: ids, options: nil)
+        var map: [String: PHAsset] = [:]
+        result.enumerateObjects { asset, _, _ in map[asset.localIdentifier] = asset }
+        return ids.compactMap { map[$0] }
     }
 
     // Boxes to carry non-Sendable UIKit/Foundation types across the async continuation cleanly.

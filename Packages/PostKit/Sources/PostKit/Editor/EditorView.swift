@@ -20,6 +20,7 @@ public struct EditorView: View {
     @State private var showInfo = false
     @State private var celebrate = false
     @State private var donePressed = false
+    @State private var isCommitting = false
     @State private var exportFailed = false
     @Namespace private var infoGlass
     @AppStorage("soundEffectsEnabled") private var soundEnabled = false
@@ -199,7 +200,7 @@ public struct EditorView: View {
                         .glassEffectID("info", in: infoGlass)
                 } else {
                     Button {
-                        withAnimation { showInfo = true }
+                        withAnimation(reduceMotion ? nil : .default) { showInfo = true }
                     } label: {
                         Color.clear
                             .frame(width: 38, height: 38)
@@ -224,7 +225,7 @@ public struct EditorView: View {
         return VStack(alignment: .leading, spacing: Theme.Space.s) {
             HStack {
                 Button {
-                    withAnimation { showInfo = false }
+                    withAnimation(reduceMotion ? nil : .default) { showInfo = false }
                 } label: {
                     Color.clear
                         .frame(width: 30, height: 30)
@@ -456,11 +457,17 @@ public struct EditorView: View {
     }
 
     private func commitDone() {
+        guard !isCommitting else { return }   // ignore a second tap during the confirm beat
+        isCommitting = true
         Haptics.impact(.soft)
+        // Snapshot the recipe now, so what we commit can't drift if anything mutates the model
+        // during the brief confirmation animation.
+        let state = model.state
+        guard !reduceMotion else { onDone(state); return }   // no cosmetic delay under Reduce Motion
         withAnimation(.easeOut(duration: 0.18)) { donePressed = true }
         Task {
             try? await Task.sleep(for: .milliseconds(170))
-            onDone(model.state)
+            onDone(state)
         }
     }
 

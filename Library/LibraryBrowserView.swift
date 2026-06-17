@@ -9,7 +9,7 @@ struct LibraryBrowserView: View {
     let onImport: ([Data]) -> Void
     @Environment(\.dismiss) private var dismiss
 
-    @State private var assets: [PHAsset] = []
+    @State private var fetchResult: PHFetchResult<PHAsset>?
     @State private var selection: [String] = []      // ordered localIdentifiers
     @State private var isImporting = false
 
@@ -22,17 +22,19 @@ struct LibraryBrowserView: View {
 
                 ScrollView {
                     if PhotoLibrary.status == .limited { limitedNotice }
-                    if assets.isEmpty {
-                        emptyState.padding(.top, 100)
-                    } else {
+                    if let fetchResult, fetchResult.count > 0 {
                         LazyVGrid(columns: columns, spacing: 3) {
-                            ForEach(assets, id: \.localIdentifier) { asset in
+                            // Index into the lazy fetch result — only visible cells realize a PHAsset.
+                            ForEach(0..<fetchResult.count, id: \.self) { index in
+                                let asset = fetchResult.object(at: index)
                                 let order = selection.firstIndex(of: asset.localIdentifier)
                                 AssetThumbnail(asset: asset, selectionOrder: order.map { $0 + 1 })
                                     .onTapGesture { toggle(asset) }
                             }
                         }
                         .padding(3)
+                    } else if fetchResult != nil {
+                        emptyState.padding(.top, 100)
                     }
                 }
             }
@@ -50,7 +52,7 @@ struct LibraryBrowserView: View {
                     .disabled(selection.isEmpty || isImporting)
                 }
             }
-            .task { assets = PhotoLibrary.fetchImageAssets() }
+            .task { fetchResult = PhotoLibrary.fetchImageResult() }
         }
     }
 
@@ -99,8 +101,7 @@ struct LibraryBrowserView: View {
     private func importSelected() {
         guard !selection.isEmpty else { return }
         isImporting = true
-        let byID = Dictionary(assets.map { ($0.localIdentifier, $0) }, uniquingKeysWith: { a, _ in a })
-        let chosen = selection.compactMap { byID[$0] }
+        let chosen = PhotoLibrary.assets(withIdentifiers: selection)
         Task {
             var datas: [Data] = []
             for asset in chosen {

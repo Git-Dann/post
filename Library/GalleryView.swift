@@ -183,7 +183,7 @@ struct GalleryView: View {
                     Image(systemName: "photo.on.rectangle.angled")
                         .font(.system(size: 52, weight: .light))
                         .foregroundStyle(Theme.accent)
-                        .symbolEffect(.breathe)
+                        .symbolEffect(.breathe, isActive: !reduceMotion)
                         .offset(y: floatIcon ? -7 : 7)            // gentle, subtle float
                         .onAppear {
                             guard !reduceMotion else { return }

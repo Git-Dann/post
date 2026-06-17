@@ -65,6 +65,11 @@ targets:
         INFOPLIST_KEY_NSCameraUsageDescription: "Snap a photo to edit right away."
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
         INFOPLIST_KEY_UIStatusBarStyle: UIStatusBarStyleLightContent
+        # Export compliance: the app uses only Apple's standard/exempt encryption
+        # (HTTPS), so no annual self-classification doc is required — declaring this
+        # lets TestFlight/App Store builds skip the "missing compliance" prompt.
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.photography
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
 

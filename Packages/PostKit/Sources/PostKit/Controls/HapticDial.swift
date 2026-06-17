@@ -16,6 +16,7 @@ public struct HapticDial: View {
 
     @State private var centered: Int?
     @State private var indicatorScale: CGFloat = 1
+    @State private var isScrolling = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let pitch: CGFloat = 14   // points between ticks
@@ -71,6 +72,7 @@ public struct HapticDial: View {
             )
             .overlay { centerIndicator(height: h) }
             .onScrollPhaseChange { old, new in
+                isScrolling = new != .idle
                 if old == .idle && new != .idle { onBegin() }
                 if old != .idle && new == .idle { onCommit() }
             }
@@ -87,8 +89,12 @@ public struct HapticDial: View {
             }
         }
         .onChange(of: value) { _, v in
+            // Ignore writes while the user is mid-scroll — otherwise a live recipe update would
+            // yank the ruler out from under their finger and fight the momentum. External changes
+            // (reset, undo) only ever arrive when the dial is idle, which is exactly when we honor them.
+            guard !isScrolling else { return }
             let idx = Int((v / detent).rounded())
-            if idx != centered { centered = idx }   // external change (e.g. reset) scrolls the ruler
+            if idx != centered { centered = idx }
         }
         .sensoryFeedback(trigger: centered) { _, new in
             (new == 0 && isBipolar) ? DialFeel.zeroHaptic : DialFeel.tickHaptic
