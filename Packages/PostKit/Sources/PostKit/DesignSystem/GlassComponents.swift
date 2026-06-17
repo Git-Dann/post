@@ -37,8 +37,8 @@ public struct GlassIconButton: View {
             prominent ? .regular.tint(Theme.accent).interactive() : .regular.interactive(),
             in: .circle
         )
-        .scaleEffect(pressed ? 0.9 : 1)
-        .animation(Theme.Motion.snappy, value: pressed)
+        .scaleEffect(pressed && !reduceMotion ? 0.9 : 1)
+        .animation(reduceMotion ? nil : Theme.Motion.snappy, value: pressed)
         ._onButtonGesture { pressing in
             pressed = pressing
         } perform: {}

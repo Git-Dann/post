@@ -61,7 +61,7 @@ struct CropCanvas: View {
     private func moveGesture(_ size: CGSize) -> some Gesture {
         DragGesture(minimumDistance: 4)
             .onChanged { v in
-                if dragStartOrigin == nil { dragStartOrigin = crop.origin }
+                if dragStartOrigin == nil { dragStartOrigin = crop.origin; Haptics.selection() }
                 let start = dragStartOrigin ?? crop.origin
                 var o = CGPoint(x: start.x + v.translation.width / size.width,
                                 y: start.y + v.translation.height / size.height)
@@ -95,7 +95,11 @@ struct CropHandles: View {
                     .position(handle.point(in: rect))
                     .gesture(
                         DragGesture(minimumDistance: 0)
-                            .onChanged { v in active = handle; resize(handle, to: v.location, size: size) }
+                            .onChanged { v in
+                                if active == nil { Haptics.selection() }   // first touch on a grip
+                                active = handle
+                                resize(handle, to: v.location, size: size)
+                            }
                             .onEnded { _ in active = nil; Haptics.selection() }
                     )
                     .accessibilityLabel("\(handle.name) crop handle")

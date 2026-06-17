@@ -97,7 +97,8 @@ public struct HapticDial: View {
             if idx != centered { centered = idx }
         }
         .sensoryFeedback(trigger: centered) { _, new in
-            (new == 0 && isBipolar) ? DialFeel.zeroHaptic : DialFeel.tickHaptic
+            if new == lowIndex || new == highIndex { return DialFeel.boundHaptic }   // hit the end
+            return (new == 0 && isBipolar) ? DialFeel.zeroHaptic : DialFeel.tickHaptic
         }
         .accessibilityElement()
         .accessibilityLabel("\(label) dial")

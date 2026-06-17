@@ -187,11 +187,11 @@ public struct EditorView: View {
     /// Aspect-ratio picker shown top-right while cropping (mirrors the (i) top-left).
     private var aspectMenu: some View {
         Menu {
-            Button("Free") { model.setCropAspect(nil) }
-            Button("Square") { model.setCropAspect(1) }
-            Button("4 : 3") { model.setCropAspect(4.0 / 3.0) }
-            Button("3 : 2") { model.setCropAspect(3.0 / 2.0) }
-            Button("16 : 9") { model.setCropAspect(16.0 / 9.0) }
+            Button("Free") { chooseAspect(nil) }
+            Button("Square") { chooseAspect(1) }
+            Button("4 : 3") { chooseAspect(4.0 / 3.0) }
+            Button("3 : 2") { chooseAspect(3.0 / 2.0) }
+            Button("16 : 9") { chooseAspect(16.0 / 9.0) }
         } label: {
             Color.clear
                 .frame(width: 38, height: 38)
@@ -202,6 +202,11 @@ public struct EditorView: View {
         .glassEffect(.regular.interactive(), in: .circle)
         .padding(Theme.Space.m)
         .accessibilityLabel("Aspect ratio")
+    }
+
+    private func chooseAspect(_ ratio: Double?) {
+        model.setCropAspect(ratio)
+        Haptics.selection()
     }
 
     /// The (i) button that morphs (Liquid Glass) into the metadata panel and back. Same
@@ -425,7 +430,7 @@ public struct EditorView: View {
             Spacer()
             GlassIconButton(isExporting ? "ellipsis" : "square.and.arrow.up", label: "Share") { share() }
                 .disabled(isExporting || exporter == nil)
-                .opacity(exporter == nil ? 0.35 : 1)
+                .opacity(exporter == nil ? 0.35 : (isExporting ? 0.5 : 1))   // dim while working
         }
         .padding(.horizontal, Theme.Space.l)
         .padding(.top, Theme.Space.s)
