@@ -401,23 +401,25 @@ public final class EditorModel: Identifiable {
     /// coordinates (0…1); `pixelWidth` is the desired output width in device pixels. Core Image only
     /// processes the requested region (plus filter support), so this stays cheap even for huge photos.
     public func inspectTile(unitRect: CGRect, pixelWidth: CGFloat) -> CGImage? {
-        let edited = FilterPipeline.makeImage(source: fullSource(), state: state, grainScale: 1)
-        let e = edited.extent
-        guard !e.isInfinite, !e.isNull, !e.isEmpty, pixelWidth > 0 else { return nil }
-        // Map the top-left-origin unit rect onto Core Image's bottom-left extent.
-        let region = CGRect(
-            x: e.minX + unitRect.minX * e.width,
-            y: e.maxY - unitRect.maxY * e.height,
-            width: unitRect.width * e.width,
-            height: unitRect.height * e.height
-        ).intersection(e)
-        guard !region.isNull, region.width > 1, region.height > 1 else { return nil }
-        let f = max(0.01, pixelWidth / region.width)   // scale the region to the on-screen pixel size
-        let scaled = edited.transformed(by: CGAffineTransform(scaleX: f, y: f))
-        let outRect = region.applying(CGAffineTransform(scaleX: f, y: f))
-        return Self.inspectContext.createCGImage(
-            scaled, from: outRect, format: .RGBA8, colorSpace: Self.inspectColorSpace
-        )
+        autoreleasepool {
+            let edited = FilterPipeline.makeImage(source: fullSource(), state: state, grainScale: 1)
+            let e = edited.extent
+            guard !e.isInfinite, !e.isNull, !e.isEmpty, pixelWidth > 0 else { return nil }
+            // Map the top-left-origin unit rect onto Core Image's bottom-left extent.
+            let region = CGRect(
+                x: e.minX + unitRect.minX * e.width,
+                y: e.maxY - unitRect.maxY * e.height,
+                width: unitRect.width * e.width,
+                height: unitRect.height * e.height
+            ).intersection(e)
+            guard !region.isNull, region.width > 1, region.height > 1 else { return nil }
+            let f = max(0.01, pixelWidth / region.width)   // scale the region to the on-screen pixel size
+            let scaled = edited.transformed(by: CGAffineTransform(scaleX: f, y: f))
+            let outRect = region.applying(CGAffineTransform(scaleX: f, y: f))
+            return Self.inspectContext.createCGImage(
+                scaled, from: outRect, format: .RGBA8, colorSpace: Self.inspectColorSpace
+            )
+        }
     }
 
     /// The image as it looks with the given geometry but *no crop* — what the crop overlay shows

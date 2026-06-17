@@ -53,6 +53,11 @@ public actor ImageExporter {
         stripLocation: Bool = false,
         maxDimension: CGFloat? = nil
     ) throws -> Data {
+        // Wrap the whole render+encode in an autorelease pool: a full-res (especially RAW/ProRAW)
+        // pipeline allocates large transient CIImage/CGImage backing stores, and this releases them
+        // as soon as the call returns instead of at the next run-loop tick — keeps peak memory down
+        // when exporting big photos or a batch back-to-back.
+        try autoreleasepool {
         guard let source = ImageLoader.fullImage(from: imageData) else {
             throw ExportError.decodeFailed
         }
@@ -109,5 +114,6 @@ public actor ImageExporter {
             throw ExportError.encodeFailed
         }
         return data as Data
+        }
     }
 }

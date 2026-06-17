@@ -397,10 +397,10 @@ struct GalleryView: View {
         let format = ExportPrefs.format
         Task {
             var urls: [URL] = []
+            let exporter = ImageExporter()   // one context for the whole batch, not one per photo
             for project in chosen {
                 guard let data = ProjectStore.originalData(for: project) else { continue }
                 let recipe = ProjectStore.recipe(for: project)
-                let exporter = ImageExporter()
                 if let out = try? await exporter.export(
                     imageData: data, state: recipe, format: format, quality: ExportPrefs.quality,
                     stripLocation: ExportPrefs.removeLocation, maxDimension: ExportPrefs.maxDimension
