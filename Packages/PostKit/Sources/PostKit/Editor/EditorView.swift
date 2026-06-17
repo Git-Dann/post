@@ -637,8 +637,9 @@ public struct EditorView: View {
             .opacity(model.canRedo ? 1 : 0.35)
     }
     /// Sits between Undo and Redo: revert every change back to the original (one step, undoable).
+    /// Uses the "reset adjustments" glyph (sliders + reset loop) rather than another u-turn arrow.
     private var revertButton: some View {
-        GlassIconButton("arrow.counterclockwise", label: "Revert all changes") {
+        GlassIconButton("slider.horizontal.2.arrow.trianglehead.counterclockwise", label: "Revert all changes") {
             guard model.hasEdits else { return }
             withAnimation(Theme.Motion.snappy) { model.reset() }
             Haptics.impact(.rigid)
