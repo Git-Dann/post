@@ -874,11 +874,16 @@ public struct EditorView: View {
         let noSubject = model.maskUnavailable && regional && !model.isPreparingMask
         let tint: Color = noSubject ? .orange : (regional ? Theme.accent : .white)
         return Menu {
-            // Explicit buttons (not a Picker) so only the active scope is marked — a checkmark on the
-            // current one, each other showing its own icon — rather than the whole list reading active.
+            // Text-only rows with a checkmark on the active scope. We deliberately drop the per-row
+            // SF Symbols: the app's accent tint colours menu icons, so showing icons turned every row
+            // yellow. The checkmark (the one tinted element) now marks only the current scope.
             ForEach(SelectiveScope.allCases, id: \.self) { s in
                 Button { selectScope(s) } label: {
-                    Label(s.title, systemImage: model.scope == s ? "checkmark" : s.systemImage)
+                    if model.scope == s {
+                        Label(s.title, systemImage: "checkmark")
+                    } else {
+                        Text(s.title)
+                    }
                 }
             }
         } label: {
