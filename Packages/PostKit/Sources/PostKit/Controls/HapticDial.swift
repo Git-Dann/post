@@ -172,6 +172,21 @@ public struct HapticDial: View {
             .frame(width: 3, height: height * 0.7)
             .scaleEffect(x: 1, y: indicatorScale, anchor: .center)
             .shadow(color: Theme.accent.opacity(0.6), radius: 6)
-            .allowsHitTesting(false)
+            // Double-tap the fixed centre mark to snap the dial back to zero. A modest hit area makes
+            // it tappable; single touches/drags still fall through to the ruler underneath.
+            .frame(width: 40, height: height)
+            .contentShape(Rectangle())
+            .onTapGesture(count: 2) { zeroOut() }
+            .accessibilityHidden(true)
+    }
+
+    /// Snap back to zero (a quick double-tap on the centre mark). Brackets the change so it's one
+    /// undo step, and gives a firm tap; no-op when already at zero.
+    private func zeroOut() {
+        guard abs(value) > 1e-9 else { return }
+        onBegin()
+        value = 0          // flows to the recipe; onChange(of: value) re-seats the ruler to centre
+        onCommit()
+        Haptics.impact(.rigid)
     }
 }
