@@ -18,6 +18,9 @@ public struct EditorView: View {
     @State private var browsingStyles = false
     /// One-time entrance: the dial slot slides up from the image on first appear.
     @State private var revealControls = false
+    /// Save-a-look name prompt.
+    @State private var showSaveLook = false
+    @State private var newLookName = ""
     @State private var shareItem: ShareItem?
     @State private var isExporting = false
     @State private var isComparing = false
@@ -85,6 +88,13 @@ public struct EditorView: View {
         // gesture (which was skewing the whole presentation away).
         .interactiveDismissDisabled()
         .sheet(item: $shareItem) { item in ActivityView(items: [item.url]) }
+        .alert("Save Look", isPresented: $showSaveLook) {
+            TextField("Name", text: $newLookName)
+            Button("Save") { saveCurrentLook() }
+            Button("Cancel", role: .cancel) { newLookName = "" }
+        } message: {
+            Text("Save the current adjustments as a reusable look in “Yours.”")
+        }
         .alert("Couldn't export this photo", isPresented: $exportFailed) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -319,6 +329,19 @@ public struct EditorView: View {
         Haptics.selection()
     }
 
+    /// Capture the current look (tone/colour/film only — geometry isn't part of a reusable look).
+    private func saveCurrentLook() {
+        var recipe = model.state
+        recipe.crop = .full
+        recipe.straightenAngle = 0
+        recipe.rotationQuarterTurns = 0
+        recipe.flippedHorizontally = false
+        recipe.flippedVertically = false
+        styleProvider.saveUserStyle(name: newLookName, recipe: recipe)
+        newLookName = ""
+        Haptics.notify(.success)
+    }
+
     /// Smooth spring for entering/leaving crop, so the card's aspect and the chrome morph rather
     /// than snap (respects Reduce Motion).
     private var cropMotion: Animation? { reduceMotion ? nil : .smooth(duration: 0.35) }
@@ -506,7 +529,10 @@ public struct EditorView: View {
                 } else {
                     // The list — opens scrolled to the active look, which stays applied while you browse.
                     StyleStrip(source: model.source, styles: styleProvider.styles,
-                               activeStyleID: model.activeStyle?.id) { style in
+                               userStyles: styleProvider.userStyles,
+                               activeStyleID: model.activeStyle?.id,
+                               onSaveCurrent: model.hasEdits ? { showSaveLook = true } : nil,
+                               onDelete: { styleProvider.removeUserStyle(id: $0.id) }) { style in
                         // Instant (no animated swap): cross-fading the dial-slot content renders the
                         // outgoing and incoming dial at once, which shows as a brief "double".
                         if style.id == Style.original.id {

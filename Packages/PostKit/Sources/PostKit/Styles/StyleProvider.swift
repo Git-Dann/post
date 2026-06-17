@@ -67,10 +67,13 @@ public struct RemoteStyleSource: StyleSource {
 @Observable
 public final class StyleProvider {
     public private(set) var styles: [Style] = []
+    /// The user's saved looks (the "Yours" section), persisted on device.
+    public private(set) var userStyles: [Style] = []
     private let source: StyleSource
 
     public init(source: StyleSource = BundledStyleSource()) {
         self.source = source
+        self.userStyles = UserStyleStore.load()
     }
 
     public func loadIfNeeded() async {
@@ -80,5 +83,21 @@ public final class StyleProvider {
         } catch {
             styles = []
         }
+    }
+
+    /// Capture the given recipe as a named user look.
+    public func saveUserStyle(name: String, recipe: EditState) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let style = Style(id: "user-\(UUID().uuidString)",
+                          name: trimmed.isEmpty ? "Untitled" : trimmed,
+                          recipe: recipe,
+                          collection: UserStyleStore.collection)
+        userStyles.append(style)
+        UserStyleStore.save(userStyles)
+    }
+
+    public func removeUserStyle(id: String) {
+        userStyles.removeAll { $0.id == id }
+        UserStyleStore.save(userStyles)
     }
 }

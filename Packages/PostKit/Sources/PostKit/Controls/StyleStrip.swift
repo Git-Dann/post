@@ -8,8 +8,14 @@ import UIKit
 public struct StyleStrip: View {
     private let source: CIImage
     private let styles: [Style]
+    /// The user's saved looks (the "Yours" section).
+    private let userStyles: [Style]
     /// The currently-applied look, so the strip opens scrolled to (and highlighting) it.
     private let activeStyleID: String?
+    /// When set, a leading "Save" card appears in the Yours section (capture the current look).
+    private let onSaveCurrent: (() -> Void)?
+    /// When set, user looks gain a Delete context-menu action.
+    private let onDelete: ((Style) -> Void)?
     private let onPick: (Style) -> Void
 
     @State private var thumbnails: [String: UIImage] = [:]
@@ -20,13 +26,21 @@ public struct StyleStrip: View {
     private static let context = CIContext(options: [.cacheIntermediates: false])
 
     /// All chips in display order, so each gets a stagger delay by its position.
-    private var orderedStyles: [Style] { Style.baselines + houseStyles + collections.flatMap(\.styles) }
+    private var orderedStyles: [Style] {
+        Style.baselines + houseStyles + collections.flatMap(\.styles) + userStyles
+    }
 
-    public init(source: CIImage, styles: [Style], activeStyleID: String? = nil,
+    public init(source: CIImage, styles: [Style], userStyles: [Style] = [],
+                activeStyleID: String? = nil,
+                onSaveCurrent: (() -> Void)? = nil,
+                onDelete: ((Style) -> Void)? = nil,
                 onPick: @escaping (Style) -> Void) {
         self.source = source
         self.styles = styles
+        self.userStyles = userStyles
         self.activeStyleID = activeStyleID
+        self.onSaveCurrent = onSaveCurrent
+        self.onDelete = onDelete
         self.onPick = onPick
     }
 
@@ -43,6 +57,12 @@ public struct StyleStrip: View {
                     ForEach(collections, id: \.name) { group in
                         divider
                         ForEach(group.styles) { chip($0) }
+                    }
+                    // The "Yours" section: a Save card (+ when there's a look to keep) and saved looks.
+                    if onSaveCurrent != nil || !userStyles.isEmpty {
+                        divider
+                        if let onSaveCurrent { saveCard(onSaveCurrent) }
+                        ForEach(userStyles) { chip($0) }
                     }
                 }
                 .padding(.horizontal, Theme.Space.l)
@@ -128,6 +148,40 @@ public struct StyleStrip: View {
         .animation(reduceMotion ? nil : .smooth(duration: 0.3).delay(stagger), value: revealed)
         .accessibilityLabel("\(style.name) style")
         .accessibilityAddTraits(isActive ? [.isSelected] : [])
+        // Saved looks can be deleted from a long-press menu.
+        .contextMenu {
+            if let onDelete, style.collection == UserStyleStore.collection {
+                Button("Delete Look", systemImage: "trash", role: .destructive) { onDelete(style) }
+            }
+        }
+    }
+
+    /// The leading "Save" card in the Yours section — captures the current look as a new preset.
+    private func saveCard(_ action: @escaping () -> Void) -> some View {
+        Button {
+            action()
+            Haptics.impact(.soft)
+        } label: {
+            VStack(spacing: 6) {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(.white.opacity(0.06))
+                    .frame(width: 60, height: 76)
+                    .overlay(Image(systemName: "plus").font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(Theme.accent))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(.white.opacity(0.15), lineWidth: 1)
+                    )
+                Text("Save")
+                    .font(.system(.caption, design: .rounded).weight(.medium))
+                    .foregroundStyle(.white.opacity(0.85))
+            }
+        }
+        .buttonStyle(.plain)
+        .offset(y: revealed ? 0 : 18)
+        .opacity(revealed ? 1 : 0)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: revealed)
+        .accessibilityLabel("Save current look")
     }
 
     private func renderThumbnails() {
@@ -139,7 +193,7 @@ public struct StyleStrip: View {
         let small = source.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
 
         var result: [String: UIImage] = [:]
-        for style in Style.baselines + styles {
+        for style in Style.baselines + styles + userStyles {
             let output = FilterPipeline.makeImage(source: small, state: style.recipe, grainScale: 1)
             if let cg = Self.context.createCGImage(output, from: output.extent) {
                 result[style.id] = UIImage(cgImage: cg)
