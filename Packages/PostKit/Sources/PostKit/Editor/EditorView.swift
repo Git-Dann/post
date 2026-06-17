@@ -507,19 +507,16 @@ public struct EditorView: View {
                     // The list — opens scrolled to the active look, which stays applied while you browse.
                     StyleStrip(source: model.source, styles: styleProvider.styles,
                                activeStyleID: model.activeStyle?.id) { style in
-                        withAnimation(Theme.Motion.snappy) {
-                            // OG is a clean revert (no intensity dial); every other look applies as
-                            // an active style the dial can then scale.
-                            if style.id == Style.original.id {
-                                model.revertToOriginal()
-                            } else {
-                                model.applyStyle(style)
-                            }
-                            browsingStyles = false
+                        // Instant (no animated swap): cross-fading the dial-slot content renders the
+                        // outgoing and incoming dial at once, which shows as a brief "double".
+                        if style.id == Style.original.id {
+                            model.revertToOriginal()
+                        } else {
+                            model.applyStyle(style)
                         }
+                        browsingStyles = false
                     }
                     .padding(.bottom, Theme.Space.s)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             } else if let tool = model.selectedTool {
                 readout
@@ -557,14 +554,14 @@ public struct EditorView: View {
         if showStyles && model.hasActiveStyle && !browsingStyles {
             // Intensity-dial mode → the X removes the look (back to the list).
             GlassIconButton("xmark", label: "Remove style") {
-                withAnimation(Theme.Motion.snappy) { model.dismissStyle() }
+                model.dismissStyle()
                 Haptics.impact(.rigid)
             }
             .transition(.scale.combined(with: .opacity))
         } else if showStyles {
             // List mode → the X closes styles (back to the tools), keeping any applied look.
             GlassIconButton("xmark", label: "Close styles") {
-                withAnimation(Theme.Motion.snappy) { showStyles = false; browsingStyles = false }
+                showStyles = false; browsingStyles = false
             }
             .transition(.scale.combined(with: .opacity))
         } else if let tool = model.selectedTool, model.value(of: tool) != 0 {
@@ -641,7 +638,7 @@ public struct EditorView: View {
     private var revertButton: some View {
         GlassIconButton("slider.horizontal.2.arrow.trianglehead.counterclockwise", label: "Revert all changes") {
             guard model.hasEdits else { return }
-            withAnimation(Theme.Motion.snappy) { model.reset() }
+            model.reset()   // instant — animating the dial-slot mode change would double the dial
             Haptics.impact(.rigid)
         }
         .disabled(!model.hasEdits)
@@ -696,10 +693,8 @@ public struct EditorView: View {
                     // Tapping Styles opens the list. If a look is active, BROWSE it: keep the look
                     // applied and land the list on that look (don't revert or jump to the front).
                     isComparing = false
-                    withAnimation(Theme.Motion.snappy) {
-                        browsingStyles = true
-                        showStyles = true
-                    }
+                    browsingStyles = true
+                    showStyles = true   // instant; an animated swap doubles the dial momentarily
                 },
                 ToolBarAction(id: "crop", title: "Crop & Rotate", systemImage: "crop.rotate", showsDot: geometryEdited) {
                     isComparing = false
@@ -729,7 +724,9 @@ public struct EditorView: View {
             model.endInteraction()
             Haptics.impact(.rigid)
         } else {
-            withAnimation(Theme.Motion.snappy) { model.selectedTool = tool }
+            // Instant: animating the swap cross-fades the old/new ruler (different tick sets), which
+            // reads as a brief "double". The chip's own selection animation still plays.
+            model.selectedTool = tool
         }
     }
 
