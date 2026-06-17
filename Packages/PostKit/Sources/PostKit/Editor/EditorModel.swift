@@ -83,17 +83,30 @@ public final class EditorModel: Identifiable {
     private var autoTarget: EditState?
     private static let analysisContext = CIContext(options: [.cacheIntermediates: false])
 
+    private func autoEnhanceTarget() -> EditState {
+        if let autoTarget { return autoTarget }
+        let t = AutoEnhance.target(for: source, context: Self.analysisContext)
+        autoTarget = t
+        return t
+    }
+
     /// Blend the auto target into the real fields by `strength` (0…1). The result is ordinary
     /// EditState values the other dials can then refine.
     public func setAutoStrength(_ strength: Double) {
-        let target = autoTarget ?? {
-            let t = AutoEnhance.target(for: source, context: Self.analysisContext)
-            autoTarget = t
-            return t
-        }()
         state.autoStrength = min(max(strength, 0), 1)
-        AutoEnhance.apply(target, strength: state.autoStrength, to: &state)
+        AutoEnhance.apply(autoEnhanceTarget(), strength: state.autoStrength, to: &state)
         recompute()
+    }
+
+    /// One-tap Auto: bake a full auto-enhance into the real tone fields as a single undoable edit.
+    /// Not a persistent mode — `autoStrength` is left at 0 so Auto never reads as "active"; the
+    /// resolved values live in Exposure/Contrast/Warmth/Vibrance, ready to refine or undo.
+    public func applyAutoEnhance() {
+        beginInteraction()
+        AutoEnhance.apply(autoEnhanceTarget(), strength: 1, to: &state)
+        state.autoStrength = 0
+        recompute()
+        endInteraction()
     }
 
     // MARK: Selective scope

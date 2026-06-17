@@ -787,6 +787,17 @@ public struct EditorView: View {
     }
 
     private func handleToolSelect(_ tool: EditTool) {
+        // Auto is a one-tap ACTION, not a mode: it bakes an auto-enhance into the real tools
+        // (Exposure/Contrast/Warmth/Vibrance) as one undoable edit, then it's done — nothing stays
+        // "selected", so it never sits there looking active. The touched tools light up as edited
+        // (which they are), and you refine or undo from there.
+        if tool == .auto {
+            if model.hasActiveStyle { model.bakeStyle() }
+            model.applyAutoEnhance()
+            Haptics.impact(.soft)
+            triggerCelebrate()
+            return
+        }
         let wasShowingStyles = showStyles
         // Reaching for a tool turns the active style into the manual starting point.
         if model.hasActiveStyle { model.bakeStyle() }
@@ -804,14 +815,6 @@ public struct EditorView: View {
             // Instant: animating the swap cross-fades the old/new ruler (different tick sets), which
             // reads as a brief "double". The chip's own selection animation still plays.
             model.selectedTool = tool
-            // One-tap Auto: selecting it applies a full auto-enhance straight away, which you can then
-            // dial back or refine on the other tools.
-            if tool == .auto, model.value(of: .auto) == 0 {
-                model.beginInteraction()
-                model.update(.auto, to: 1)
-                model.endInteraction()
-                Haptics.impact(.soft)
-            }
         }
     }
 
