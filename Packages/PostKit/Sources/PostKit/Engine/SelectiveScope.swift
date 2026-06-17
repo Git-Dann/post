@@ -35,4 +35,13 @@ public nonisolated enum SelectiveScope: String, Codable, Sendable, Equatable, Ca
 
     /// True when the edit should be masked to a region (vs. applied everywhere).
     public var isRegional: Bool { self != .whole }
+
+    /// Spoken to VoiceOver when the scope changes.
+    public var announcement: String {
+        switch self {
+        case .whole: "Adjusting the whole photo"
+        case .subject: "Adjusting the subject"
+        case .background: "Adjusting the background"
+        }
+    }
 }

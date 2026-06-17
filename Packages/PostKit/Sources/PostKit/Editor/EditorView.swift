@@ -246,6 +246,11 @@ public struct EditorView: View {
         .onChange(of: model.isCropping) { _, _ in resetZoom(animated: false) }
         .onChange(of: model.selectedTool) { _, _ in resetZoom(animated: false) }
         .onChange(of: model.state) { _, _ in inspectTile = nil; scheduleInspectTile() }
+        // Subject segmentation finishes async; if it found nothing, tell VoiceOver (the chip shows
+        // it visually) so a scoped edit's silent fall-back to whole-photo isn't a mystery.
+        .onChange(of: model.maskUnavailable) { _, unavailable in
+            if unavailable, model.scope.isRegional { announce("No subject detected. Adjusting the whole photo.") }
+        }
         // Tap the photo to compare against the original (a sticky toggle). This catcher sits BELOW
         // the dial/controls overlay (declared earlier in the chain), so a tap on the dial scrubs and
         // never flips the comparison — and grabbing the dial clears it instantly (see the dial's
@@ -537,8 +542,10 @@ public struct EditorView: View {
                         // outgoing and incoming dial at once, which shows as a brief "double".
                         if style.id == Style.original.id {
                             model.revertToOriginal()
+                            announce("Original restored")
                         } else {
                             model.applyStyle(style)
+                            announce("\(style.name) applied")
                         }
                         browsingStyles = false
                     }
@@ -872,8 +879,18 @@ public struct EditorView: View {
     private var scopeBinding: Binding<SelectiveScope> {
         Binding(
             get: { model.scope },
-            set: { model.setScope($0); Haptics.selection() }
+            set: {
+                model.setScope($0)
+                Haptics.selection()
+                announce($0.announcement)
+            }
         )
+    }
+
+    /// Speak a state change to VoiceOver (a no-op when VoiceOver is off). Used for changes that
+    /// aren't reflected in a focused control — scope, applied style, finished export.
+    private func announce(_ message: String) {
+        AccessibilityNotification.Announcement(message).post()
     }
 
     private var readout: some View {
@@ -900,9 +917,11 @@ public struct EditorView: View {
             if let url {
                 Haptics.notify(.success)
                 triggerCelebrate()
+                announce("Photo ready to share")
                 shareItem = ShareItem(url: url)
             } else {
                 Haptics.notify(.error)
+                announce("Export failed")
                 exportFailed = true
             }
         }
