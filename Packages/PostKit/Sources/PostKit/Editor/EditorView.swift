@@ -634,34 +634,52 @@ public struct EditorView: View {
             .disabled(!model.canRedo)
             .opacity(model.canRedo ? 1 : 0.35)
     }
+    /// Sits between Undo and Redo: revert every change back to the original (one step, undoable).
+    private var revertButton: some View {
+        GlassIconButton("arrow.counterclockwise", label: "Revert all changes") {
+            guard model.hasEdits else { return }
+            withAnimation(Theme.Motion.snappy) { model.reset() }
+            Haptics.impact(.rigid)
+        }
+        .disabled(!model.hasEdits)
+        .opacity(model.hasEdits ? 1 : 0.35)
+    }
     private var shareButton: some View {
         GlassIconButton(isExporting ? "ellipsis" : "square.and.arrow.up", label: "Share") { share() }
             .disabled(isExporting || exporter == nil)
             .opacity(exporter == nil ? 0.35 : (isExporting ? 0.5 : 1))   // dim while working
     }
 
-    /// Portrait: Gallery | Undo Redo | Share across the top.
+    /// Portrait: Gallery | Undo · Revert · Redo | Share across the top.
+    /// Grouped in a GlassEffectContainer so the system batches the glass (Apple's recommended pattern
+    /// for multiple glass effects).
     private var topBar: some View {
-        HStack {
-            galleryButton
-            Spacer()
-            HStack(spacing: Theme.Space.s) { undoButton; redoButton }
-            Spacer()
-            shareButton
+        GlassEffectContainer {
+            HStack {
+                galleryButton
+                Spacer()
+                HStack(spacing: Theme.Space.s) { undoButton; revertButton; redoButton }
+                Spacer()
+                shareButton
+            }
         }
         .padding(.horizontal, Theme.Space.l)
         .padding(.top, Theme.Space.s)
     }
 
-    /// Landscape: the same buttons as a left rail — Gallery top, Undo/Redo centred, Share bottom.
+    /// Landscape: the same buttons as a left rail — Gallery top, Undo · Revert · Redo centred,
+    /// Share bottom.
     private var actionRail: some View {
-        VStack(spacing: Theme.Space.m) {
-            galleryButton
-            Spacer(minLength: 0)
-            undoButton
-            redoButton
-            Spacer(minLength: 0)
-            shareButton
+        GlassEffectContainer {
+            VStack(spacing: Theme.Space.m) {
+                galleryButton
+                Spacer(minLength: 0)
+                undoButton
+                revertButton
+                redoButton
+                Spacer(minLength: 0)
+                shareButton
+            }
         }
         .padding(.vertical, Theme.Space.s)
     }
