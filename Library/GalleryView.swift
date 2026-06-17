@@ -36,6 +36,8 @@ struct GalleryView: View {
     @State private var infoSheet: InfoSheet?
     @State private var floatIcon = false
     @State private var loadError = false
+    /// Edits copied from one project, ready to paste onto another.
+    @State private var copiedRecipe: EditState?
     @AppStorage(ExportPrefs.removeLocationKey, store: .postShared) private var removeLocation = true
     @AppStorage("hasPrimedPhotoAccess") private var hasPrimedPhotoAccess = false
     @AppStorage("hasSeenTour") private var hasSeenTour = false
@@ -171,6 +173,17 @@ struct GalleryView: View {
                         .matchedTransitionSource(id: project.id, in: zoomNS)
                         .contextMenu {
                             Button("Info", systemImage: "info.circle") { showInfo(for: project) }
+                            if project.isEdited {
+                                Button("Copy Edits", systemImage: "doc.on.doc") {
+                                    copiedRecipe = ProjectStore.recipe(for: project)
+                                    Haptics.impact(.light)
+                                }
+                            }
+                            if copiedRecipe != nil {
+                                Button("Paste Edits", systemImage: "doc.on.clipboard") {
+                                    pasteEdits(to: project)
+                                }
+                            }
                             Button("Delete", systemImage: "trash", role: .destructive) {
                                 ProjectStore.delete(project, in: modelContext)
                             }
@@ -263,6 +276,17 @@ struct GalleryView: View {
         let model = EditorModel(source: loaded.preview, originalData: data, previewScale: loaded.previewScale)
         model.load(recipe: ProjectStore.recipe(for: project))
         session = EditorSession(model: model, project: project)
+    }
+
+    /// Apply the copied edits to a project, re-rendering its thumbnail to match.
+    private func pasteEdits(to project: Project) {
+        guard let recipe = copiedRecipe,
+              let data = Storage.readOriginal(fileName: project.originalFileName),
+              let loaded = ImageLoader.makeLoaded(from: data) else { return }
+        let model = EditorModel(source: loaded.preview, originalData: data, previewScale: loaded.previewScale)
+        model.load(recipe: recipe)
+        ProjectStore.update(project, state: recipe, thumbnail: model.thumbnailData(), in: modelContext)
+        Haptics.notify(.success)
     }
 
     private func showInfo(for project: Project) {
