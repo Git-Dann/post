@@ -81,6 +81,7 @@ public enum ProjectStore {
         originalData: Data,
         state: EditState,
         thumbnail: Data?,
+        originalName: String? = nil,
         in context: ModelContext
     ) -> Project? {
         let id = UUID()
@@ -91,6 +92,7 @@ public enum ProjectStore {
             project = Project(
                 id: id,
                 originalData: originalData,
+                originalName: originalName,
                 recipeData: (try? encoder.encode(state)) ?? Data(),
                 thumbnailData: thumbnail
             )
@@ -109,6 +111,7 @@ public enum ProjectStore {
         project = Project(
             id: id,
             originalFileName: fileName,
+            originalName: originalName,
             recipeData: (try? encoder.encode(state)) ?? Data(),
             thumbnailData: thumbnail
         )

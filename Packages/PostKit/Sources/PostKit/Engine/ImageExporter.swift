@@ -26,6 +26,16 @@ public actor ImageExporter {
 
     public enum ExportError: Error { case decodeFailed, renderFailed, encodeFailed }
 
+    /// A friendly export filename: "Edited <source name>.<ext>", e.g. "Edited IMG_1234.heic".
+    /// Falls back to "Edited Photo" when the original carried no usable name.
+    public nonisolated static func suggestedFileName(forOriginal original: String?,
+                                                     format: Format) -> String {
+        let base = (original as NSString?)?.deletingPathExtension
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = (base?.isEmpty == false) ? base! : "Photo"
+        return "Edited \(name).\(format.fileExtension)"
+    }
+
     private let ciContext: CIContext
     private let outputColorSpace = CGColorSpace(name: CGColorSpace.displayP3)!
 

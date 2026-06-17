@@ -3,7 +3,22 @@ import SwiftData
 import PhotosUI
 import UIKit
 import CoreImage
+import UniformTypeIdentifiers
 import PostKit
+
+/// Loads a picked photo while preserving its filename, so exports can read "Edited <name>".
+/// Falls back to a plain data load (no name) when the picker won't vend a file representation.
+private struct PickedPhoto: Transferable {
+    let data: Data
+    let name: String?
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(importedContentType: .image) { received in
+            let name = received.file.lastPathComponent
+            let data = try Data(contentsOf: received.file)
+            return PickedPhoto(data: data, name: name)
+        }
+    }
+}
 
 /// A re-editable session: the live editor model plus the project it persists to (nil for the
 /// dev sample, which isn't saved).
@@ -92,7 +107,7 @@ struct GalleryView: View {
         // here forced the in-process picker, which needed authorization and could present black.)
         .photosPicker(isPresented: $showPicker, selection: $pickerItems, matching: .images)
         .sheet(isPresented: $showBrowser) {
-            LibraryBrowserView { datas in createProjects(from: datas) }
+            LibraryBrowserView { datas in createProjects(from: datas.map { ($0, nil) }) }
         }
         .sheet(isPresented: $showPrimer, onDismiss: {
             // If they just granted access, take them straight into their library to pick photos —
@@ -278,30 +293,38 @@ struct GalleryView: View {
     private func importItems(_ items: [PhotosPickerItem]) {
         Task {
             defer { pickerItems = [] }
-            var datas: [Data] = []
+            var imported: [(Data, String?)] = []
             for item in items {
-                if let data = try? await item.loadTransferable(type: Data.self) { datas.append(data) }
+                // Prefer a name-preserving load so exports can read "Edited <original name>"; fall
+                // back to raw data (no name) if the picker won't hand us a file representation.
+                if let picked = try? await item.loadTransferable(type: PickedPhoto.self) {
+                    imported.append((picked.data, picked.name))
+                } else if let data = try? await item.loadTransferable(type: Data.self) {
+                    imported.append((data, nil))
+                }
             }
-            createProjects(from: datas)
+            createProjects(from: imported)
         }
     }
 
     /// Turn imported image data (from the picker or the in-app browser) into projects. Opens the
     /// editor when exactly one photo came in; bulk imports just populate the grid.
-    private func createProjects(from datas: [Data]) {
+    private func createProjects(from items: [(data: Data, name: String?)]) {
         var created: [(EditorModel, Project)] = []
-        for data in datas {
+        for (data, name) in items {
             guard let loaded = ImageLoader.makeLoaded(from: data) else { continue }
-            let model = EditorModel(source: loaded.preview, originalData: data, previewScale: loaded.previewScale)
+            let model = EditorModel(source: loaded.preview, originalData: data,
+                                    originalName: name, previewScale: loaded.previewScale)
             if let project = ProjectStore.create(
-                originalData: data, state: model.state, thumbnail: model.thumbnailData(), in: modelContext
+                originalData: data, state: model.state, thumbnail: model.thumbnailData(),
+                originalName: name, in: modelContext
             ) {
                 created.append((model, project))
             }
         }
         if created.count == 1, let (model, project) = created.first {
             session = EditorSession(model: model, project: project)
-        } else if created.isEmpty && !datas.isEmpty {
+        } else if created.isEmpty && !items.isEmpty {
             loadError = true   // every chosen photo failed to import
         }
     }
@@ -312,7 +335,8 @@ struct GalleryView: View {
             loadError = true   // original missing/corrupt/locked — don't fail silently
             return
         }
-        let model = EditorModel(source: loaded.preview, originalData: data, previewScale: loaded.previewScale)
+        let model = EditorModel(source: loaded.preview, originalData: data,
+                                originalName: project.originalName, previewScale: loaded.previewScale)
         model.load(recipe: ProjectStore.recipe(for: project))
         session = EditorSession(model: model, project: project)
     }
@@ -405,8 +429,7 @@ struct GalleryView: View {
                     imageData: data, state: recipe, format: format, quality: ExportPrefs.quality,
                     stripLocation: ExportPrefs.removeLocation, maxDimension: ExportPrefs.maxDimension
                 ) {
-                    let url = FileManager.default.temporaryDirectory
-                        .appendingPathComponent("Post-\(UUID().uuidString).\(format.fileExtension)")
+                    let url = exportURL(originalName: project.originalName, format: format)
                     if (try? out.write(to: url)) != nil { urls.append(url) }
                 }
             }
@@ -436,10 +459,19 @@ struct GalleryView: View {
                 imageData: data, state: state, format: format, quality: ExportPrefs.quality,
                 stripLocation: ExportPrefs.removeLocation, maxDimension: ExportPrefs.maxDimension
             ) else { return nil }
-            let url = FileManager.default.temporaryDirectory
-                .appendingPathComponent("Post-\(UUID().uuidString).\(format.fileExtension)")
+            let url = exportURL(originalName: model.originalName, format: format)
             do { try output.write(to: url); return url } catch { return nil }
         }
+    }
+
+    /// A unique temp URL carrying a human-friendly export name ("Edited <original>.<ext>"), each in
+    /// its own subfolder so two exports that share a name can't collide.
+    private func exportURL(originalName: String?, format: ImageExporter.Format) -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent(
+            ImageExporter.suggestedFileName(forOriginal: originalName, format: format))
     }
 
     #if DEBUG

@@ -58,8 +58,11 @@ final class ShareViewController: UIViewController {
         guard let output = try? await exporter.export(imageData: data, state: state, format: format, quality: ExportPrefs.quality, stripLocation: ExportPrefs.removeLocation, maxDimension: ExportPrefs.maxDimension) else {
             return nil
         }
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("Post-\(UUID().uuidString).\(format.fileExtension)")
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appendingPathComponent(
+            ImageExporter.suggestedFileName(forOriginal: nil, format: format))
         do {
             try output.write(to: url)
             return url

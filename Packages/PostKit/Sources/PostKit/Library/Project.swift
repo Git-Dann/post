@@ -19,6 +19,10 @@ public final class Project {
     /// kept in-store (`originalData`) instead — see `ProjectStore.originalData(for:)`.
     public var originalFileName: String = ""
 
+    /// The source photo's display name (e.g. "IMG_1234.HEIC"), when the import gave us one — used to
+    /// name exports nicely ("Edited IMG_1234"). `nil` for picker imports that carry no name.
+    public var originalName: String?
+
     /// Original image bytes stored inside the model (external storage). Used when iCloud sync is on
     /// so the original rides along as a CKAsset; `nil` for disk-backed (sync-off) projects.
     @Attribute(.externalStorage) public var originalData: Data?
@@ -33,6 +37,7 @@ public final class Project {
         id: UUID = UUID(),
         originalFileName: String = "",
         originalData: Data? = nil,
+        originalName: String? = nil,
         recipeData: Data = Data(),
         thumbnailData: Data? = nil,
         createdAt: Date = .now
@@ -40,6 +45,7 @@ public final class Project {
         self.id = id
         self.originalFileName = originalFileName
         self.originalData = originalData
+        self.originalName = originalName
         self.recipeData = recipeData
         self.thumbnailData = thumbnailData
         self.createdAt = createdAt

@@ -16,6 +16,8 @@ public final class EditorModel: Identifiable {
     public let source: CIImage
     /// Original encoded data, kept for full-resolution export (nil for synthetic/dev sources).
     public let originalData: Data?
+    /// Source photo's display name, if known — used to name exports ("Edited <name>").
+    public let originalName: String?
     /// Preview edge ÷ full edge, used to match grain density between preview and export.
     public let previewScale: CGFloat
 
@@ -38,9 +40,10 @@ public final class EditorModel: Identifiable {
     private var redoStack: [EditState] = []
     private var interactionSnapshot: EditState?
 
-    public init(source: CIImage, originalData: Data? = nil, previewScale: CGFloat = 1) {
+    public init(source: CIImage, originalData: Data? = nil, originalName: String? = nil, previewScale: CGFloat = 1) {
         self.source = source
         self.originalData = originalData
+        self.originalName = originalName
         self.previewScale = previewScale
         self.displayImage = FilterPipeline.makeImage(
             source: source,
