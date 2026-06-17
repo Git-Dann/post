@@ -33,12 +33,14 @@ public struct CropOverlay: View {
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: Theme.Space.s) {
             topControls
             GeometryReader { geo in
                 let fitted = fittedRect(in: geo.size)
                 ZStack {
-                    MetalImageView(image: displayImage).ignoresSafeArea()
+                    // Contained within this area (no .ignoresSafeArea) so the image doesn't bleed
+                    // up behind the top rotate/flip controls.
+                    MetalImageView(image: displayImage)
                     dimMask(fitted: fitted)
                     cropFrame(fitted: fitted)
                 }
@@ -150,7 +152,6 @@ public struct CropOverlay: View {
                         y: fitted.minY + (crop.midY) * fitted.height
                     )
             }
-            .ignoresSafeArea()
             .allowsHitTesting(false)
     }
 

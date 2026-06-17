@@ -66,10 +66,8 @@ public struct EditorView: View {
 
             if model.isCropping {
                 CropOverlay(model: model)
-                    .transition(.opacity)
             }
         }
-        .animation(Theme.Motion.settle, value: model.isCropping)
         .statusBarHidden()
         .sheet(item: $shareItem) { item in ActivityView(items: [item.url]) }
         .task {
