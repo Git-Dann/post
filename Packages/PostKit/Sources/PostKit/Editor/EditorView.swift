@@ -83,6 +83,10 @@ public struct EditorView: View {
             }
         }
         .statusBarHidden()
+        // The editor dismisses only via its Done/Gallery buttons. Disabling interactive dismissal
+        // stops the zoom-transition's pull/pinch-to-dismiss from hijacking the pinch-to-inspect
+        // gesture (which was skewing the whole presentation away).
+        .interactiveDismissDisabled()
         .sheet(item: $shareItem) { item in ActivityView(items: [item.url]) }
         .alert("Couldn't export this photo", isPresented: $exportFailed) {
             Button("OK", role: .cancel) {}
