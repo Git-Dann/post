@@ -59,3 +59,18 @@ public enum Storage {
         try? FileManager.default.removeItem(at: originalURL(for: fileName))
     }
 }
+
+public extension UserDefaults {
+    /// Settings shared between the app and its extensions via the App Group (falls back to standard).
+    static let postShared = UserDefaults(suiteName: Storage.appGroupID) ?? .standard
+}
+
+/// Export preferences shared across the app, extensions and the Shortcuts intent.
+public enum ExportPrefs {
+    public static let removeLocationKey = "removeLocationOnExport"
+
+    /// Strip location metadata on export. Defaults to ON (privacy-first) when unset.
+    public static var removeLocation: Bool {
+        UserDefaults.postShared.object(forKey: removeLocationKey) as? Bool ?? true
+    }
+}

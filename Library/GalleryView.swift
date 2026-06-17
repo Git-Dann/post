@@ -34,7 +34,7 @@ struct GalleryView: View {
     @State private var showPrimer = false
     @State private var infoSheet: InfoSheet?
     @State private var floatIcon = false
-    @AppStorage("removeLocationOnExport") private var removeLocation = false
+    @AppStorage(ExportPrefs.removeLocationKey, store: .postShared) private var removeLocation = true
     @AppStorage("hasPrimedPhotoAccess") private var hasPrimedPhotoAccess = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var zoomNS

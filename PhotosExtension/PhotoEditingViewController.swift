@@ -95,10 +95,15 @@ final class PhotoEditingViewController: UIViewController, PHContentEditingContro
         )
 
         let exporter = ImageExporter()
-        if let rendered = try? await exporter.export(imageData: data, state: state, format: .jpeg) {
-            try? rendered.write(to: output.renderedContentURL)
+        do {
+            let rendered = try await exporter.export(
+                imageData: data, state: state, format: .jpeg, stripLocation: ExportPrefs.removeLocation)
+            try rendered.write(to: output.renderedContentURL)
+            completionHandler(output)
+        } catch {
+            // Report failure to Photos rather than committing an empty/blank edit.
+            completionHandler(nil)
         }
-        completionHandler(output)
     }
 }
 

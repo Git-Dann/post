@@ -54,7 +54,7 @@ final class ShareViewController: UIViewController {
 
     private func exportToTempFile(data: Data, state: EditState) async -> URL? {
         let exporter = ImageExporter()
-        guard let output = try? await exporter.export(imageData: data, state: state, format: .heic) else {
+        guard let output = try? await exporter.export(imageData: data, state: state, format: .heic, stripLocation: ExportPrefs.removeLocation) else {
             return nil
         }
         let url = FileManager.default.temporaryDirectory
@@ -78,7 +78,7 @@ final class ShareViewController: UIViewController {
         )
         Task {
             let exporter = ImageExporter()
-            if let output = try? await exporter.export(imageData: data, state: state, format: .heic) {
+            if let output = try? await exporter.export(imageData: data, state: state, format: .heic, stripLocation: ExportPrefs.removeLocation) {
                 await saveToPhotos(output)
             }
             finish()

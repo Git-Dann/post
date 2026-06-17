@@ -65,7 +65,11 @@ public actor ImageExporter {
         properties[kCGImagePropertyOrientation as String] = 1
         properties[kCGImageDestinationLossyCompressionQuality as String] = quality
         if stripLocation {
+            // Remove every block that can carry location, not just GPS: IPTC location names and the
+            // Apple maker-note (which encodes location-derived data) too.
             properties[kCGImagePropertyGPSDictionary as String] = nil
+            properties[kCGImagePropertyIPTCDictionary as String] = nil
+            properties[kCGImagePropertyMakerAppleDictionary as String] = nil
         }
 
         let data = NSMutableData()

@@ -6,7 +6,7 @@ import PostKit
 /// Settings & about. Doubles as the privacy statement — the app's whole pitch — plus export and
 /// photo-access controls.
 struct SettingsView: View {
-    @AppStorage("removeLocationOnExport") private var removeLocation = false
+    @AppStorage(ExportPrefs.removeLocationKey, store: .postShared) private var removeLocation = true
     @AppStorage("soundEffectsEnabled") private var soundEnabled = false
     @AppStorage(AccentChoice.storageKey) private var accentRaw = AccentChoice.amber.rawValue
     @State private var photoStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
