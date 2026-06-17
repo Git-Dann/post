@@ -33,6 +33,8 @@ struct SettingsView: View {
                             .padding(.top, Theme.Space.s)
                     }
                     .padding(Theme.Space.l)
+                    .frame(maxWidth: 600)            // don't let panels stretch wide in landscape/iPad
+                    .frame(maxWidth: .infinity)      // …keep them centred
                 }
             }
             .navigationTitle("Settings")
