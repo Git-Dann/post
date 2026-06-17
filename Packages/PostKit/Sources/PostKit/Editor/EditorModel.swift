@@ -85,6 +85,71 @@ public final class EditorModel: Identifiable {
         endInteraction()
     }
 
+    // MARK: In-place crop (working state while `isCropping`, committed on Done)
+
+    /// The crop rectangle being edited — normalized, top-left origin (UI space).
+    public var cropWorkingRect = CGRect(x: 0, y: 0, width: 1, height: 1)
+    public private(set) var cropStraighten: Double = 0
+    public private(set) var cropQuarterTurns: Int = 0
+    public private(set) var cropFlipH = false
+    public private(set) var cropFlipV = false
+    /// Cached uncropped preview the crop canvas shows (recomputed only when geometry changes).
+    public private(set) var cropDisplayImage: CIImage = CIImage.empty()
+
+    /// Aspect (w/h) of the crop preview, so the editor card fits the full image while cropping.
+    public var cropPreviewAspect: CGFloat {
+        let e = cropDisplayImage.extent
+        guard e.height > 0, !e.isInfinite, !e.isNull, !e.isEmpty else { return aspect }
+        return e.width / e.height
+    }
+
+    /// Enter crop: seed the working state from the current recipe.
+    public func beginCrop() {
+        let c = state.crop
+        cropWorkingRect = CGRect(x: c.x, y: 1 - c.y - c.height, width: c.width, height: c.height)
+        cropStraighten = state.straightenAngle
+        cropQuarterTurns = state.rotationQuarterTurns
+        cropFlipH = state.flippedHorizontally
+        cropFlipV = state.flippedVertically
+        recomputeCropDisplay()
+        isCropping = true
+    }
+
+    public func setCropStraighten(_ value: Double) { cropStraighten = value; recomputeCropDisplay() }
+    public func rotateQuarter(_ delta: Int) { cropQuarterTurns = (cropQuarterTurns + delta + 4) % 4; recomputeCropDisplay() }
+    public func toggleFlipH() { cropFlipH.toggle(); recomputeCropDisplay() }
+    public func toggleFlipV() { cropFlipV.toggle(); recomputeCropDisplay() }
+
+    private func recomputeCropDisplay() {
+        cropDisplayImage = croplessImage(
+            straighten: cropStraighten, quarterTurns: cropQuarterTurns, flipH: cropFlipH, flipV: cropFlipV
+        )
+    }
+
+    /// Commit the crop into the recipe.
+    public func commitCrop() {
+        let r = cropWorkingRect
+        let imageCrop = CropRect(x: r.minX, y: 1 - r.minY - r.height, width: r.width, height: r.height)
+        apply(crop: imageCrop, straighten: cropStraighten,
+              quarterTurns: cropQuarterTurns, flipH: cropFlipH, flipV: cropFlipV)
+        isCropping = false
+    }
+
+    public func cancelCrop() { isCropping = false }
+
+    /// Set the crop to a centered rectangle of the given width-over-height ratio (nil = Free/full).
+    public func setCropAspect(_ ratio: Double?) {
+        guard let ratio else {
+            cropWorkingRect = CGRect(x: 0, y: 0, width: 1, height: 1)
+            return
+        }
+        let e = cropDisplayImage.extent
+        let imageAspect = e.height > 0 ? e.width / e.height : 1
+        var w = 1.0, h = 1.0
+        if ratio > imageAspect { h = imageAspect / ratio } else { w = ratio / imageAspect }
+        cropWorkingRect = CGRect(x: (1 - w) / 2, y: (1 - h) / 2, width: w, height: h)
+    }
+
     // MARK: Undo / redo
 
     /// Snapshot before a continuous interaction (a dial drag, a crop session).

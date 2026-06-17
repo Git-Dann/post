@@ -53,19 +53,22 @@ public struct EditorView: View {
                 if showsChrome { topBar }
 
                 framedImage
-                    .aspectRatio(model.aspect, contentMode: .fit)
+                    .aspectRatio(model.isCropping ? model.cropPreviewAspect : model.aspect,
+                                 contentMode: .fit)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding(.horizontal, Theme.Space.s)
 
-                if showsChrome && !model.isCropping {
-                    toolStrip
-                    actionBar
-                        .padding(.bottom, Theme.Space.s)
+                if showsChrome {
+                    if model.isCropping {
+                        cropToolStrip
+                        cropActionBar
+                            .padding(.bottom, Theme.Space.s)
+                    } else {
+                        toolStrip
+                        actionBar
+                            .padding(.bottom, Theme.Space.s)
+                    }
                 }
-            }
-
-            if model.isCropping {
-                CropOverlay(model: model)
             }
         }
         .statusBarHidden()
@@ -89,7 +92,7 @@ public struct EditorView: View {
                 model.apply(crop: model.state.crop, straighten: 0.2,
                             quarterTurns: 0, flipH: false, flipV: false)
             }
-            if args.contains("--open-crop") { model.isCropping = true }
+            if args.contains("--open-crop") { model.beginCrop() }
             if args.contains("--live-test") {
                 Task {
                     for i in 0..<80 {
@@ -111,45 +114,68 @@ public struct EditorView: View {
 
     // MARK: Framed image (with the controls living inside it)
 
+    @ViewBuilder
     private var framedImage: some View {
-        MetalImageView(image: isComparing ? model.source : model.displayImage)
-            // Press and hold the image to compare against the original. Attached to the image itself,
-            // BELOW the controls overlay, so it never competes with the dial drag — that competition
-            // was hijacking the touch and pinning the preview to the original mid-drag (the cause of
-            // "no live preview"). The `!isAdjustingDial` guard is a second line of defence.
-            .onLongPressGesture(minimumDuration: 0.18, maximumDistance: 60) {
-            } onPressingChanged: { pressing in
-                guard model.hasEdits, !showStyles, !showInfo, !isAdjustingDial else { return }
-                withAnimation(Theme.Motion.snappy) { isComparing = pressing }
-                if pressing { Haptics.impact(.soft) }
+        Group {
+            if model.isCropping {
+                CropCanvas(model: model)
+            } else {
+                MetalImageView(image: isComparing ? model.source : model.displayImage)
             }
-            // Delight: a subtle glass sweep when a style is applied.
-            .shimmerSweep(token: model.activeStyle?.id)
-            // Delight: a brief sparkle when an export is ready to share/save.
-            .overlay {
-                if celebrate {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 26, weight: .semibold))
-                        .foregroundStyle(Theme.accent)
-                        .symbolEffect(.bounce, value: celebrate)
-                        .transition(.scale(scale: 0.5).combined(with: .opacity))
-                        .allowsHitTesting(false)
-                }
+        }
+        // Press and hold to compare against the original (disabled while cropping).
+        .onLongPressGesture(minimumDuration: 0.18, maximumDistance: 60) {
+        } onPressingChanged: { pressing in
+            guard model.hasEdits, !showStyles, !showInfo, !isAdjustingDial, !model.isCropping else { return }
+            withAnimation(Theme.Motion.snappy) { isComparing = pressing }
+            if pressing { Haptics.impact(.soft) }
+        }
+        .shimmerSweep(token: model.activeStyle?.id)
+        .overlay {
+            if celebrate {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundStyle(Theme.accent)
+                    .symbolEffect(.bounce, value: celebrate)
+                    .transition(.scale(scale: 0.5).combined(with: .opacity))
+                    .allowsHitTesting(false)
             }
-            .overlay(alignment: .topLeading) { infoMorph }
-            .overlay(alignment: .top) {
-                if isComparing && !showInfo {
-                    GlassPill("Original")
-                        .padding(.top, Theme.Space.m)
-                        .transition(.opacity.combined(with: .scale))
-                }
+        }
+        .overlay(alignment: .topLeading) { infoMorph }
+        // Aspect-ratio menu — top-right, mirroring the (i).
+        .overlay(alignment: .topTrailing) { if model.isCropping { aspectMenu } }
+        .overlay(alignment: .top) {
+            if isComparing && !showInfo {
+                GlassPill("Original")
+                    .padding(.top, Theme.Space.m)
+                    .transition(.opacity.combined(with: .scale))
             }
-            .overlay(alignment: .bottom) { imageControls }
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.image, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.Radius.image, style: .continuous)
-                    .strokeBorder(.white.opacity(0.08), lineWidth: 1)
-            )
+        }
+        .overlay(alignment: .bottom) { imageControls }
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.image, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.image, style: .continuous)
+                .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+        )
+    }
+
+    /// Aspect-ratio picker shown top-right while cropping (mirrors the (i) top-left).
+    private var aspectMenu: some View {
+        Menu {
+            Button("Free") { model.setCropAspect(nil) }
+            Button("Square") { model.setCropAspect(1) }
+            Button("4 : 3") { model.setCropAspect(4.0 / 3.0) }
+            Button("3 : 2") { model.setCropAspect(3.0 / 2.0) }
+            Button("16 : 9") { model.setCropAspect(16.0 / 9.0) }
+        } label: {
+            Color.clear
+                .frame(width: 38, height: 38)
+                .overlay(Image(systemName: "aspectratio").font(.system(size: 15, weight: .semibold)))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: .circle)
+        .padding(Theme.Space.m)
     }
 
     /// The (i) button that morphs (Liquid Glass) into the metadata panel and back. Same
@@ -221,7 +247,17 @@ public struct EditorView: View {
     /// The dial (or styles strip) that lives inside the bottom of the image, over a scrim.
     private var imageControls: some View {
         VStack(spacing: Theme.Space.s) {
-            if showStyles {
+            if model.isCropping {
+                // Crop uses the same dial slot — for straighten, like every other tool.
+                straightenReadout
+                HapticDial(
+                    value: straightenBinding,
+                    range: -0.4...0.4,
+                    detent: 0.0175,   // ≈ 1° steps
+                    soundEnabled: soundEnabled
+                )
+                .padding(.horizontal, Theme.Space.l)
+            } else if showStyles {
                 if model.hasActiveStyle {
                     // Selected style: the dial now controls the style's intensity.
                     styleReadout
@@ -320,6 +356,25 @@ public struct EditorView: View {
         Binding(get: { model.styleIntensity }, set: { model.setStyleIntensity($0) })
     }
 
+    private var straightenReadout: some View {
+        VStack(spacing: 2) {
+            Text(String(format: "%+.0f°", model.cropStraighten * 180 / .pi))
+                .font(.system(size: 30, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .contentTransition(.numericText())
+                .foregroundStyle(.white)
+            Text("Straighten")
+                .font(.system(.subheadline, design: .rounded))
+                .foregroundStyle(.white.opacity(0.7))
+        }
+        .shadow(color: .black.opacity(0.4), radius: 4)
+        .animation(Theme.Motion.snappy, value: model.cropStraighten)
+    }
+
+    private var straightenBinding: Binding<Double> {
+        Binding(get: { model.cropStraighten }, set: { model.setCropStraighten($0) })
+    }
+
     // MARK: Top bar (on the canvas, above the image)
 
     private var topBar: some View {
@@ -354,7 +409,7 @@ public struct EditorView: View {
                     showStyles = true
                 },
                 ToolBarAction(id: "crop", title: "Crop & Rotate", systemImage: "crop.rotate", showsDot: geometryEdited) {
-                    model.isCropping = true
+                    model.beginCrop()
                 }
             ],
             selected: model.selectedTool,
@@ -390,6 +445,38 @@ public struct EditorView: View {
             try? await Task.sleep(for: .milliseconds(170))
             onDone(model.state)
         }
+    }
+
+    // MARK: Crop chrome (rotate/flip where the tool chips sit; Done + X like the editor)
+
+    private var cropToolStrip: some View {
+        HStack(spacing: Theme.Space.l) {
+            GlassIconButton("rotate.left") { model.rotateQuarter(-1); Haptics.impact(.light) }
+            GlassIconButton("rotate.right") { model.rotateQuarter(1); Haptics.impact(.light) }
+            GlassIconButton("arrow.left.and.right.righttriangle.left.righttriangle.right") { model.toggleFlipH(); Haptics.impact(.light) }
+            GlassIconButton("arrow.up.and.down.righttriangle.up.righttriangle.down") { model.toggleFlipV(); Haptics.impact(.light) }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+    }
+
+    private var cropActionBar: some View {
+        Button {
+            Haptics.impact(.soft)
+            model.commitCrop()
+        } label: {
+            Text("Done")
+                .font(.system(.headline, design: .rounded))
+                .padding(.horizontal, Theme.Space.xl)
+                .padding(.vertical, 14)
+        }
+        .buttonStyle(.glass)
+        .tint(.white)
+        .frame(maxWidth: .infinity)
+        .overlay(alignment: .trailing) {
+            GlassIconButton("xmark") { model.cancelCrop() }
+        }
+        .padding(.horizontal, Theme.Space.l)
     }
 
     private var readout: some View {
