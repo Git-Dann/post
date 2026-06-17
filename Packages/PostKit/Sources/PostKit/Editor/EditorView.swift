@@ -130,7 +130,6 @@ public struct EditorView: View {
             withAnimation(Theme.Motion.snappy) { isComparing = pressing }
             if pressing { Haptics.impact(.soft) }
         }
-        .shimmerSweep(token: model.activeStyle?.id)
         .overlay {
             if celebrate {
                 Image(systemName: "sparkles")
@@ -272,14 +271,12 @@ public struct EditorView: View {
                     .padding(.horizontal, Theme.Space.l)
                 } else {
                     StyleStrip(source: model.source, styles: styleProvider.styles) { style in
-                        withAnimation(Theme.Motion.settle) {
-                            // OG is a clean revert (no intensity dial); every other look applies
-                            // as an active style the dial can then scale.
-                            if style.id == Style.original.id {
-                                model.revertToOriginal()
-                            } else {
-                                model.applyStyle(style)
-                            }
+                        // OG is a clean revert (no intensity dial); every other look applies as an
+                        // active style the dial can then scale. No animation — instant.
+                        if style.id == Style.original.id {
+                            model.revertToOriginal()
+                        } else {
+                            model.applyStyle(style)
                         }
                     }
                     .padding(.bottom, Theme.Space.s)
