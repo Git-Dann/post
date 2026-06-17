@@ -47,34 +47,44 @@ public struct HapticDial: View {
     public var body: some View {
         GeometryReader { geo in
             let h = geo.size.height
-            ScrollView(.horizontal) {
-                LazyHStack(spacing: 0) {
-                    ForEach(lowIndex...highIndex, id: \.self) { i in
-                        tick(i, height: h)
-                            .frame(width: pitch)
-                            .id(i)
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal) {
+                    LazyHStack(spacing: 0) {
+                        ForEach(lowIndex...highIndex, id: \.self) { i in
+                            tick(i, height: h)
+                                .frame(width: pitch)
+                                .id(i)
+                        }
                     }
+                    .scrollTargetLayout()
                 }
-                .scrollTargetLayout()
-            }
-            .scrollIndicators(.hidden)
-            .scrollTargetBehavior(.viewAligned)
-            .scrollPosition(id: $centered, anchor: .center)
-            .contentMargins(.horizontal, geo.size.width / 2, for: .scrollContent)
-            // Fade the ruler out at the edges (mask, so it goes transparent rather than to a band).
-            .mask(
-                LinearGradient(stops: [
-                    .init(color: .clear, location: 0),
-                    .init(color: .black, location: 0.14),
-                    .init(color: .black, location: 0.86),
-                    .init(color: .clear, location: 1)
-                ], startPoint: .leading, endPoint: .trailing)
-            )
-            .overlay { centerIndicator(height: h) }
-            .onScrollPhaseChange { old, new in
-                isScrolling = new != .idle
-                if old == .idle && new != .idle { onBegin() }
-                if old != .idle && new == .idle { onCommit() }
+                .scrollIndicators(.hidden)
+                .scrollTargetBehavior(.viewAligned)
+                .scrollPosition(id: $centered, anchor: .center)
+                .contentMargins(.horizontal, geo.size.width / 2, for: .scrollContent)
+                // Fade the ruler out at the edges (mask, so it goes transparent rather than to a band).
+                .mask(
+                    LinearGradient(stops: [
+                        .init(color: .clear, location: 0),
+                        .init(color: .black, location: 0.14),
+                        .init(color: .black, location: 0.86),
+                        .init(color: .clear, location: 1)
+                    ], startPoint: .leading, endPoint: .trailing)
+                )
+                .overlay { centerIndicator(height: h) }
+                .onScrollPhaseChange { old, new in
+                    isScrolling = new != .idle
+                    if old == .idle && new != .idle { onBegin() }
+                    if old != .idle && new == .idle { onCommit() }
+                }
+                .onAppear {
+                    // scrollPosition doesn't reliably apply its INITIAL value when it's at an extreme
+                    // (e.g. a style applied at 100% = the last tick), because centring the end tick
+                    // needs the trailing content margin that only exists once the width is known.
+                    // Force it after this layout pass — instant, no haptic (centered doesn't change).
+                    guard let centered else { return }
+                    DispatchQueue.main.async { proxy.scrollTo(centered, anchor: .center) }
+                }
             }
         }
         .frame(height: 64)
