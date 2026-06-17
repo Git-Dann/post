@@ -38,6 +38,11 @@ struct GalleryView: View {
     @State private var loadError = false
     /// Edits copied from one project, ready to paste onto another.
     @State private var copiedRecipe: EditState?
+    /// Multi-select mode + the chosen project IDs, for bulk actions.
+    @State private var selecting = false
+    @State private var selection: Set<UUID> = []
+    @State private var batchShareURLs: [URL] = []
+    @State private var showBatchShare = false
     @AppStorage(ExportPrefs.removeLocationKey, store: .postShared) private var removeLocation = true
     @AppStorage("hasPrimedPhotoAccess") private var hasPrimedPhotoAccess = false
     @AppStorage("hasSeenTour") private var hasSeenTour = false
@@ -60,6 +65,11 @@ struct GalleryView: View {
                 }
             }
         }
+        // Bulk-action bar floats over the grid while selecting.
+        .overlay(alignment: .bottom) {
+            if selecting && !selection.isEmpty { selectionBar }
+        }
+        .sheet(isPresented: $showBatchShare) { ActivityView(items: batchShareURLs) }
         .fullScreenCover(item: $session) { session in
             EditorView(
                 model: session.model,
@@ -141,9 +151,26 @@ struct GalleryView: View {
 
     private var header: some View {
         HStack {
-            GlassIconButton("gearshape", label: "Settings") { showSettings = true }
-            Spacer()
-            GlassIconButton("plus", label: "Add photo", prominent: true) { importTapped() }
+            if selecting {
+                Button("Done") { withAnimation(Theme.Motion.snappy) { exitSelection() } }
+                    .font(.headline)
+                    .tint(Theme.accent)
+                Spacer()
+                Button(selection.count == projects.count ? "Deselect All" : "Select All") {
+                    toggleSelectAll()
+                }
+                .font(.subheadline)
+                .tint(Theme.accent)
+            } else {
+                GlassIconButton("gearshape", label: "Settings") { showSettings = true }
+                Spacer()
+                if !projects.isEmpty {
+                    GlassIconButton("checklist", label: "Select") {
+                        withAnimation(Theme.Motion.snappy) { selecting = true }
+                    }
+                }
+                GlassIconButton("plus", label: "Add photo", prominent: true) { importTapped() }
+            }
         }
         .padding(.horizontal, Theme.Space.l)
         .padding(.top, Theme.Space.s)
@@ -151,8 +178,9 @@ struct GalleryView: View {
 
     private var titleBar: some View {
         HStack {
-            Text("Post")
+            Text(selecting ? "\(selection.count) Selected" : "Post")
                 .font(.system(size: 34, weight: .bold, design: .rounded))
+                .contentTransition(.numericText())
             Spacer()
         }
         .padding(.horizontal, Theme.Space.l)
@@ -167,25 +195,36 @@ struct GalleryView: View {
         return ScrollView {
             LazyVGrid(columns: columns, spacing: Theme.Space.m) {
                 ForEach(projects) { project in
-                    Button { open(project) } label: { ProjectCard(project: project) }
+                    Button {
+                        if selecting { toggleSelection(project) } else { open(project) }
+                    } label: {
+                        ProjectCard(project: project)
+                            .overlay(alignment: .topLeading) {
+                                if selecting { selectionBadge(on: selection.contains(project.id)) }
+                            }
+                            .opacity(selecting && !selection.contains(project.id) ? 0.6 : 1)
+                    }
                         .buttonStyle(.plain)
                         // Source for the native zoom transition into the editor and back.
                         .matchedTransitionSource(id: project.id, in: zoomNS)
                         .contextMenu {
-                            Button("Info", systemImage: "info.circle") { showInfo(for: project) }
-                            if project.isEdited {
-                                Button("Copy Edits", systemImage: "doc.on.doc") {
-                                    copiedRecipe = ProjectStore.recipe(for: project)
-                                    Haptics.impact(.light)
+                            // No per-item menu while multi-selecting (the tap is a toggle).
+                            if !selecting {
+                                Button("Info", systemImage: "info.circle") { showInfo(for: project) }
+                                if project.isEdited {
+                                    Button("Copy Edits", systemImage: "doc.on.doc") {
+                                        copiedRecipe = ProjectStore.recipe(for: project)
+                                        Haptics.impact(.light)
+                                    }
                                 }
-                            }
-                            if copiedRecipe != nil {
-                                Button("Paste Edits", systemImage: "doc.on.clipboard") {
-                                    pasteEdits(to: project)
+                                if copiedRecipe != nil {
+                                    Button("Paste Edits", systemImage: "doc.on.clipboard") {
+                                        pasteEdits(to: project)
+                                    }
                                 }
-                            }
-                            Button("Delete", systemImage: "trash", role: .destructive) {
-                                ProjectStore.delete(project, in: modelContext)
+                                Button("Delete", systemImage: "trash", role: .destructive) {
+                                    ProjectStore.delete(project, in: modelContext)
+                                }
                             }
                         }
                         // Subtle: cards ease in as they scroll into view.
@@ -287,6 +326,93 @@ struct GalleryView: View {
         model.load(recipe: recipe)
         ProjectStore.update(project, state: recipe, thumbnail: model.thumbnailData(), in: modelContext)
         Haptics.notify(.success)
+    }
+
+    // MARK: Multi-select
+
+    private func selectionBadge(on selected: Bool) -> some View {
+        Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+            .font(.system(size: 22))
+            .symbolRenderingMode(.palette)
+            .foregroundStyle(selected ? .black : .white, selected ? Theme.accent : .white.opacity(0.25))
+            .padding(8)
+    }
+
+    private var selectionBar: some View {
+        HStack(spacing: Theme.Space.xl) {
+            if copiedRecipe != nil { barButton("doc.on.clipboard", "Paste") { bulkPaste() } }
+            barButton("square.and.arrow.up", "Share") { shareSelected() }
+            barButton("trash", "Delete", tint: .red) { bulkDelete() }
+        }
+        .padding(.horizontal, Theme.Space.xl)
+        .padding(.vertical, Theme.Space.m)
+        .glassEffect(in: .capsule)
+        .padding(.bottom, Theme.Space.l)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    private func barButton(_ symbol: String, _ label: String, tint: Color = .white,
+                           action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: symbol).font(.system(size: 20, weight: .semibold))
+                Text(label).font(.caption2.weight(.medium))
+            }
+            .foregroundStyle(tint)
+            .frame(minWidth: 56)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func toggleSelection(_ project: Project) {
+        if selection.contains(project.id) { selection.remove(project.id) }
+        else { selection.insert(project.id) }
+        Haptics.selection()
+    }
+
+    private func exitSelection() {
+        selecting = false
+        selection.removeAll()
+    }
+
+    private func toggleSelectAll() {
+        if selection.count == projects.count { selection.removeAll() }
+        else { selection = Set(projects.map(\.id)) }
+    }
+
+    private func selectedProjects() -> [Project] { projects.filter { selection.contains($0.id) } }
+
+    private func bulkDelete() {
+        for project in selectedProjects() { ProjectStore.delete(project, in: modelContext) }
+        withAnimation(Theme.Motion.snappy) { exitSelection() }
+    }
+
+    private func bulkPaste() {
+        for project in selectedProjects() { pasteEdits(to: project) }
+        withAnimation(Theme.Motion.snappy) { exitSelection() }
+    }
+
+    private func shareSelected() {
+        let chosen = selectedProjects()
+        let format = ExportPrefs.format
+        Task {
+            var urls: [URL] = []
+            for project in chosen {
+                guard let data = Storage.readOriginal(fileName: project.originalFileName) else { continue }
+                let recipe = ProjectStore.recipe(for: project)
+                let exporter = ImageExporter()
+                if let out = try? await exporter.export(
+                    imageData: data, state: recipe, format: format, quality: ExportPrefs.quality,
+                    stripLocation: ExportPrefs.removeLocation, maxDimension: ExportPrefs.maxDimension
+                ) {
+                    let url = FileManager.default.temporaryDirectory
+                        .appendingPathComponent("Post-\(UUID().uuidString).\(format.fileExtension)")
+                    if (try? out.write(to: url)) != nil { urls.append(url) }
+                }
+            }
+            if !urls.isEmpty { batchShareURLs = urls; showBatchShare = true }
+            exitSelection()
+        }
     }
 
     private func showInfo(for project: Project) {
