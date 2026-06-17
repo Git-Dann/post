@@ -7,17 +7,27 @@ import SwiftData
 public enum ProjectStore {
     private static let encoder = JSONEncoder()
     private static let decoder = JSONDecoder()
+    private static var cachedContainer: ModelContainer?
 
-    /// Builds (or opens) the shared SwiftData container in the App Group container.
+    /// The shared SwiftData container in the App Group container. Cached per process so the app and
+    /// each extension open the store at most once (avoids same-process double-open lock contention).
     public static func makeContainer() -> ModelContainer {
+        if let cachedContainer { return cachedContainer }
         Storage.ensureDirectories()
+        let container: ModelContainer
         do {
             let config = ModelConfiguration(url: Storage.storeURL)
-            return try ModelContainer(for: Project.self, configurations: config)
+            container = try ModelContainer(for: Project.self, configurations: config)
+            Storage.protectStoreFiles()
         } catch {
-            // Last-resort fallback so the app never fails to launch.
-            return try! ModelContainer(for: Project.self)
+            // Degrade to an in-memory store rather than crashing on a corrupt/locked on-disk store
+            // (in-memory creation is effectively infallible, so we never trap a real device).
+            let mem = ModelConfiguration(isStoredInMemoryOnly: true)
+            container = (try? ModelContainer(for: Project.self, configurations: mem))
+                ?? { fatalError("Unable to create even an in-memory ModelContainer: \(error)") }()
         }
+        cachedContainer = container
+        return container
     }
 
     /// Persist a freshly imported/edited image: write the original to disk and create the record.
@@ -42,16 +52,24 @@ public enum ProjectStore {
             thumbnailData: thumbnail
         )
         context.insert(project)
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            // Roll back so a failed save doesn't leave an orphaned original on disk.
+            context.delete(project)
+            Storage.deleteOriginal(fileName: fileName)
+            return nil
+        }
         return project
     }
 
+    @discardableResult
     public static func update(
         _ project: Project,
         state: EditState,
         thumbnail: Data?,
         in context: ModelContext
-    ) {
+    ) -> Bool {
         if let encoded = try? encoder.encode(state) {
             project.recipeData = encoded
         }
@@ -59,16 +77,17 @@ public enum ProjectStore {
             project.thumbnailData = thumbnail
         }
         project.modifiedAt = .now
-        try? context.save()
+        return (try? context.save()) != nil
     }
 
     public static func recipe(for project: Project) -> EditState {
         (try? decoder.decode(EditState.self, from: project.recipeData)) ?? EditState()
     }
 
-    public static func delete(_ project: Project, in context: ModelContext) {
+    @discardableResult
+    public static func delete(_ project: Project, in context: ModelContext) -> Bool {
         Storage.deleteOriginal(fileName: project.originalFileName)
         context.delete(project)
-        try? context.save()
+        return (try? context.save()) != nil
     }
 }

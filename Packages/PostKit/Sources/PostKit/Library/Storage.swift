@@ -23,12 +23,22 @@ public enum Storage {
         baseDirectory.appendingPathComponent("Post.store")
     }
 
+    private static let protection: [FileAttributeKey: Any] =
+        [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication]
+
     public static func ensureDirectories() {
+        // Protect the base directory too — the SwiftData store (thumbnails + recipes) lives here.
         try? FileManager.default.createDirectory(
-            at: originalsDirectory,
-            withIntermediateDirectories: true,
-            attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication]
-        )
+            at: baseDirectory, withIntermediateDirectories: true, attributes: protection)
+        try? FileManager.default.createDirectory(
+            at: originalsDirectory, withIntermediateDirectories: true, attributes: protection)
+    }
+
+    /// File-protect the SwiftData store and its WAL/SHM sidecars (SwiftData doesn't set this itself).
+    public static func protectStoreFiles() {
+        for suffix in ["", "-wal", "-shm"] {
+            try? FileManager.default.setAttributes(protection, ofItemAtPath: storeURL.path + suffix)
+        }
     }
 
     public static func originalURL(for fileName: String) -> URL {

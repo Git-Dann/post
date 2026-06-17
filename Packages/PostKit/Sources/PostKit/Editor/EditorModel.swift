@@ -164,11 +164,14 @@ public final class EditorModel: Identifiable {
         if interactionSnapshot == nil { interactionSnapshot = state }
     }
 
+    private static let undoLimit = 50
+
     /// Commit the interaction; pushes an undo entry only if something actually changed.
     public func endInteraction() {
         defer { interactionSnapshot = nil }
         guard let snap = interactionSnapshot, snap != state else { return }
         undoStack.append(snap)
+        if undoStack.count > Self.undoLimit { undoStack.removeFirst(undoStack.count - Self.undoLimit) }
         redoStack.removeAll()
     }
 
