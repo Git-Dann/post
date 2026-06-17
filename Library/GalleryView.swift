@@ -96,7 +96,10 @@ struct GalleryView: View {
             // Native zoom: the editor grows out of the tapped photo and pushes back to its slot.
             .navigationTransition(.zoom(sourceID: session.project?.id ?? session.id, in: zoomNS))
         }
-        .sheet(isPresented: $showSettings) { SettingsView() }
+        .sheet(isPresented: $showSettings, onDismiss: {
+            // "Show Welcome Screen" in Settings clears hasSeenTour — replay the tour on return.
+            if !hasSeenTour { showTour = true }
+        }) { SettingsView() }
         .sheet(item: $infoSheet) { sheet in MetadataView(rows: sheet.rows) }
         .alert("Couldn't open photo", isPresented: $loadError) {
             Button("OK", role: .cancel) {}

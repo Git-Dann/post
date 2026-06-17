@@ -14,6 +14,7 @@ struct SettingsView: View {
     @AppStorage("soundEffectsEnabled") private var soundEnabled = false
     @AppStorage(AccentChoice.storageKey) private var accentRaw = AccentChoice.amber.rawValue
     @AppStorage(SyncPrefs.iCloudEnabledKey, store: .postShared) private var iCloudSync = false
+    @AppStorage("hasSeenTour") private var hasSeenTour = false
     @State private var photoStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
     @State private var syncJustChanged = false
     @Environment(\.modelContext) private var modelContext
@@ -36,6 +37,7 @@ struct SettingsView: View {
                         iCloudSection
                         exportFormatSection
                         exportOptions
+                        aboutSection
                         Text(version)
                             .font(.footnote)
                             .foregroundStyle(.tertiary)
@@ -214,6 +216,36 @@ struct SettingsView: View {
             }
             withAnimation(.snappy) { syncJustChanged = true }
         }
+    }
+
+    private var aboutSection: some View {
+        Button {
+            hasSeenTour = false   // GalleryView re-presents the welcome when Settings dismisses
+            Haptics.selection()
+            dismiss()
+        } label: {
+            HStack(spacing: Theme.Space.m) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Theme.accent)
+                    .frame(width: 26)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Show Welcome Screen")
+                        .font(.subheadline.weight(.medium))
+                    Text("Replay the intro tour.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(Theme.Space.l)
+            .frame(maxWidth: .infinity)
+            .glassEffect(in: .rect(cornerRadius: Theme.Radius.card))
+        }
+        .buttonStyle(.plain)
     }
 
     private var exportFormatSection: some View {
