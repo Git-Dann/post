@@ -5,6 +5,7 @@ import SwiftUI
 /// generic and the dial is fully reusable.
 public enum EditTool: String, CaseIterable, Identifiable, Sendable {
     case crop
+    case auto
     case exposure
     case brightness
     case contrast
@@ -25,7 +26,7 @@ public enum EditTool: String, CaseIterable, Identifiable, Sendable {
     /// Tools shown on the dial, in display order (crop is a separate geometry mode). Ordered
     /// roughly the way you'd grade a photo: light → tone → colour → finishing.
     public static let dialTools: [EditTool] = [
-        .exposure, .brightness, .contrast, .highlights, .shadows,
+        .auto, .exposure, .brightness, .contrast, .highlights, .shadows,
         .saturation, .vibrance, .warmth, .tint, .hue,
         .sharpness, .vignette, .fade, .grain
     ]
@@ -38,6 +39,7 @@ public enum EditTool: String, CaseIterable, Identifiable, Sendable {
     public var title: String {
         switch self {
         case .crop: "Crop"
+        case .auto: "Auto"
         case .exposure: "Exposure"
         case .brightness: "Brightness"
         case .contrast: "Contrast"
@@ -58,6 +60,7 @@ public enum EditTool: String, CaseIterable, Identifiable, Sendable {
     public var systemImage: String {
         switch self {
         case .crop: "crop.rotate"
+        case .auto: "sparkles"
         case .exposure: "plusminus.circle"
         case .brightness: "sun.max"
         case .contrast: "circle.lefthalf.filled"
@@ -80,7 +83,7 @@ public enum EditTool: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .exposure, .brightness, .contrast, .highlights, .shadows,
              .saturation, .vibrance, .warmth, .tint, .hue: -1...1
-        case .sharpness, .vignette, .fade, .grain: 0...1
+        case .auto, .sharpness, .vignette, .fade, .grain: 0...1
         case .crop: 0...1
         }
     }
@@ -93,6 +96,7 @@ public enum EditTool: String, CaseIterable, Identifiable, Sendable {
 
     public func value(in state: EditState) -> Double {
         switch self {
+        case .auto: state.autoStrength
         case .exposure: state.exposure
         case .brightness: state.brightness
         case .contrast: state.contrast
@@ -114,6 +118,7 @@ public enum EditTool: String, CaseIterable, Identifiable, Sendable {
     public func set(_ value: Double, in state: inout EditState) {
         let v = min(max(value, range.lowerBound), range.upperBound)
         switch self {
+        case .auto: state.autoStrength = v   // editor re-derives the real fields (see EditorModel)
         case .exposure: state.exposure = v
         case .brightness: state.brightness = v
         case .contrast: state.contrast = v
@@ -137,7 +142,7 @@ public enum EditTool: String, CaseIterable, Identifiable, Sendable {
     public func readout(in state: EditState) -> String {
         let v = value(in: state)
         switch self {
-        case .sharpness, .vignette, .fade, .grain:
+        case .auto, .sharpness, .vignette, .fade, .grain:
             return String(format: "%.0f", v * 100)
         default:
             return String(format: "%+.0f", v * 100)

@@ -101,9 +101,9 @@ struct FilterPipelineTests {
         let ctx = CIContext(options: [.cacheIntermediates: false])
         let neutral = bytes(FilterPipeline.makeImage(source: src, state: EditState()), ctx)
         #expect(neutral != nil)
-        // Grain is excluded: its Metal kernel loads from the host app's metallib, absent in the test
-        // bundle, so it's a no-op here (verified visually on-device instead).
-        for tool in EditTool.dialTools where tool != .grain {
+        // Excluded: grain (its Metal kernel loads from the host app's metallib, absent in the test
+        // bundle) and auto (it resolves through EditorModel, not a direct EditState field).
+        for tool in EditTool.dialTools where tool != .grain && tool != .auto {
             var s = EditState()
             tool.set(tool.range.upperBound, in: &s)
             let out = bytes(FilterPipeline.makeImage(source: src, state: s), ctx)

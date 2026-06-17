@@ -69,7 +69,27 @@ public final class EditorModel: Identifiable {
 
     /// Live update from the dial (no undo snapshot — that happens at gesture boundaries).
     public func update(_ tool: EditTool, to newValue: Double) {
+        if tool == .auto { setAutoStrength(newValue); return }
         tool.set(newValue, in: &state)
+        recompute()
+    }
+
+    // MARK: Auto enhance
+
+    /// Analyzed enhancement target for this image, computed once and cached.
+    private var autoTarget: EditState?
+    private static let analysisContext = CIContext(options: [.cacheIntermediates: false])
+
+    /// Blend the auto target into the real fields by `strength` (0…1). The result is ordinary
+    /// EditState values the other dials can then refine.
+    public func setAutoStrength(_ strength: Double) {
+        let target = autoTarget ?? {
+            let t = AutoEnhance.target(for: source, context: Self.analysisContext)
+            autoTarget = t
+            return t
+        }()
+        state.autoStrength = min(max(strength, 0), 1)
+        AutoEnhance.apply(target, strength: state.autoStrength, to: &state)
         recompute()
     }
 

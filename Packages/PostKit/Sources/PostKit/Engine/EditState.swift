@@ -26,6 +26,10 @@ public nonisolated struct EditState: Codable, Sendable, Equatable {
     public var warmth: Double = 0
     public var tint: Double = 0
 
+    /// Auto-enhance strength (0…1). The resolved adjustment values live in the fields above; this
+    /// just remembers where the Auto dial sits.
+    public var autoStrength: Double = 0
+
     // MARK: Film looks & finishing — 0...1, 0 = off.
     public var fade: Double = 0
     public var grain: Double = 0
@@ -45,7 +49,7 @@ public nonisolated struct EditState: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case exposure, brightness, contrast, highlights, shadows, saturation, vibrance, hue
-        case warmth, tint
+        case warmth, tint, autoStrength
         case fade, grain, sharpness, vignette
         case crop, straightenAngle, rotationQuarterTurns, flippedHorizontally, flippedVertically
     }
@@ -64,6 +68,7 @@ public nonisolated struct EditState: Codable, Sendable, Equatable {
         hue = try c.decodeIfPresent(Double.self, forKey: .hue) ?? 0
         warmth = try c.decodeIfPresent(Double.self, forKey: .warmth) ?? 0
         tint = try c.decodeIfPresent(Double.self, forKey: .tint) ?? 0
+        autoStrength = try c.decodeIfPresent(Double.self, forKey: .autoStrength) ?? 0
         fade = try c.decodeIfPresent(Double.self, forKey: .fade) ?? 0
         grain = try c.decodeIfPresent(Double.self, forKey: .grain) ?? 0
         sharpness = try c.decodeIfPresent(Double.self, forKey: .sharpness) ?? 0
@@ -82,7 +87,7 @@ public nonisolated struct EditState: Codable, Sendable, Equatable {
     public var hasToneAdjustments: Bool {
         exposure != 0 || brightness != 0 || contrast != 0 || highlights != 0 || shadows != 0
             || saturation != 0 || vibrance != 0 || hue != 0 || warmth != 0 || tint != 0
-            || fade != 0 || grain != 0 || sharpness != 0 || vignette != 0
+            || autoStrength != 0 || fade != 0 || grain != 0 || sharpness != 0 || vignette != 0
     }
 }
 
