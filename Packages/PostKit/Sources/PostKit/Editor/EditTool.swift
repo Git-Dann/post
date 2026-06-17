@@ -5,17 +5,30 @@ import SwiftUI
 /// generic and the dial is fully reusable.
 public enum EditTool: String, CaseIterable, Identifiable, Sendable {
     case crop
+    case exposure
     case brightness
     case contrast
+    case highlights
+    case shadows
     case saturation
+    case vibrance
+    case warmth
+    case tint
     case hue
+    case sharpness
+    case vignette
     case fade
     case grain
 
     public var id: String { rawValue }
 
-    /// Tools shown on the dial, in display order (crop is a separate geometry mode).
-    public static let dialTools: [EditTool] = [.brightness, .contrast, .saturation, .hue, .fade, .grain]
+    /// Tools shown on the dial, in display order (crop is a separate geometry mode). Ordered
+    /// roughly the way you'd grade a photo: light → tone → colour → finishing.
+    public static let dialTools: [EditTool] = [
+        .exposure, .brightness, .contrast, .highlights, .shadows,
+        .saturation, .vibrance, .warmth, .tint, .hue,
+        .sharpness, .vignette, .fade, .grain
+    ]
 
     /// All tools shown in the bottom tool strip, crop first.
     public static let toolbar: [EditTool] = [.crop] + dialTools
@@ -25,10 +38,18 @@ public enum EditTool: String, CaseIterable, Identifiable, Sendable {
     public var title: String {
         switch self {
         case .crop: "Crop"
+        case .exposure: "Exposure"
         case .brightness: "Brightness"
         case .contrast: "Contrast"
+        case .highlights: "Highlights"
+        case .shadows: "Shadows"
         case .saturation: "Saturation"
+        case .vibrance: "Vibrance"
+        case .warmth: "Warmth"
+        case .tint: "Tint"
         case .hue: "Hue"
+        case .sharpness: "Sharpness"
+        case .vignette: "Vignette"
         case .fade: "Fade"
         case .grain: "Grain"
         }
@@ -37,20 +58,29 @@ public enum EditTool: String, CaseIterable, Identifiable, Sendable {
     public var systemImage: String {
         switch self {
         case .crop: "crop.rotate"
+        case .exposure: "plusminus.circle"
         case .brightness: "sun.max"
         case .contrast: "circle.lefthalf.filled"
+        case .highlights: "circle.tophalf.filled"
+        case .shadows: "circle.bottomhalf.filled"
         case .saturation: "drop"
+        case .vibrance: "drop.fill"
+        case .warmth: "thermometer.medium"
+        case .tint: "camera.filters"
         case .hue: "paintpalette"
+        case .sharpness: "wand.and.rays"
+        case .vignette: "circle.dotted"
         case .fade: "sun.haze"
         case .grain: "circle.grid.3x3"
         }
     }
 
-    /// Dial range for this tool (bipolar adjustments −1...1, film looks 0...1).
+    /// Dial range for this tool (bipolar adjustments −1...1, positive-only looks 0...1).
     public var range: ClosedRange<Double> {
         switch self {
-        case .brightness, .contrast, .saturation, .hue: -1...1
-        case .fade, .grain: 0...1
+        case .exposure, .brightness, .contrast, .highlights, .shadows,
+             .saturation, .vibrance, .warmth, .tint, .hue: -1...1
+        case .sharpness, .vignette, .fade, .grain: 0...1
         case .crop: 0...1
         }
     }
@@ -63,10 +93,18 @@ public enum EditTool: String, CaseIterable, Identifiable, Sendable {
 
     public func value(in state: EditState) -> Double {
         switch self {
+        case .exposure: state.exposure
         case .brightness: state.brightness
         case .contrast: state.contrast
+        case .highlights: state.highlights
+        case .shadows: state.shadows
         case .saturation: state.saturation
+        case .vibrance: state.vibrance
+        case .warmth: state.warmth
+        case .tint: state.tint
         case .hue: state.hue
+        case .sharpness: state.sharpness
+        case .vignette: state.vignette
         case .fade: state.fade
         case .grain: state.grain
         case .crop: 0
@@ -76,21 +114,30 @@ public enum EditTool: String, CaseIterable, Identifiable, Sendable {
     public func set(_ value: Double, in state: inout EditState) {
         let v = min(max(value, range.lowerBound), range.upperBound)
         switch self {
+        case .exposure: state.exposure = v
         case .brightness: state.brightness = v
         case .contrast: state.contrast = v
+        case .highlights: state.highlights = v
+        case .shadows: state.shadows = v
         case .saturation: state.saturation = v
+        case .vibrance: state.vibrance = v
+        case .warmth: state.warmth = v
+        case .tint: state.tint = v
         case .hue: state.hue = v
+        case .sharpness: state.sharpness = v
+        case .vignette: state.vignette = v
         case .fade: state.fade = v
         case .grain: state.grain = v
         case .crop: break
         }
     }
 
-    /// Friendly value readout (the "+0.0" pill in the reference).
+    /// Friendly value readout (the "+0.0" pill in the reference). Positive-only looks show an
+    /// unsigned 0–100; bipolar adjustments show a signed ±100.
     public func readout(in state: EditState) -> String {
         let v = value(in: state)
         switch self {
-        case .fade, .grain:
+        case .sharpness, .vignette, .fade, .grain:
             return String(format: "%.0f", v * 100)
         default:
             return String(format: "%+.0f", v * 100)

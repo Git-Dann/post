@@ -13,14 +13,24 @@ import CoreGraphics
 public nonisolated struct EditState: Codable, Sendable, Equatable {
 
     // MARK: Tone & color — normalized −1...1, 0 = neutral.
+    public var exposure: Double = 0
     public var brightness: Double = 0
     public var contrast: Double = 0
+    public var highlights: Double = 0
+    public var shadows: Double = 0
     public var saturation: Double = 0
+    public var vibrance: Double = 0
     public var hue: Double = 0
 
-    // MARK: Film looks — 0...1, 0 = off.
+    // MARK: White balance — −1...1, 0 = neutral.
+    public var warmth: Double = 0
+    public var tint: Double = 0
+
+    // MARK: Film looks & finishing — 0...1, 0 = off.
     public var fade: Double = 0
     public var grain: Double = 0
+    public var sharpness: Double = 0
+    public var vignette: Double = 0
 
     // MARK: Geometry.
     public var crop: CropRect = .full
@@ -34,7 +44,9 @@ public nonisolated struct EditState: Codable, Sendable, Equatable {
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
-        case brightness, contrast, saturation, hue, fade, grain
+        case exposure, brightness, contrast, highlights, shadows, saturation, vibrance, hue
+        case warmth, tint
+        case fade, grain, sharpness, vignette
         case crop, straightenAngle, rotationQuarterTurns, flippedHorizontally, flippedVertically
     }
 
@@ -42,12 +54,20 @@ public nonisolated struct EditState: Codable, Sendable, Equatable {
     /// manifests (and future remote recipes) specify only the fields they change.
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        exposure = try c.decodeIfPresent(Double.self, forKey: .exposure) ?? 0
         brightness = try c.decodeIfPresent(Double.self, forKey: .brightness) ?? 0
         contrast = try c.decodeIfPresent(Double.self, forKey: .contrast) ?? 0
+        highlights = try c.decodeIfPresent(Double.self, forKey: .highlights) ?? 0
+        shadows = try c.decodeIfPresent(Double.self, forKey: .shadows) ?? 0
         saturation = try c.decodeIfPresent(Double.self, forKey: .saturation) ?? 0
+        vibrance = try c.decodeIfPresent(Double.self, forKey: .vibrance) ?? 0
         hue = try c.decodeIfPresent(Double.self, forKey: .hue) ?? 0
+        warmth = try c.decodeIfPresent(Double.self, forKey: .warmth) ?? 0
+        tint = try c.decodeIfPresent(Double.self, forKey: .tint) ?? 0
         fade = try c.decodeIfPresent(Double.self, forKey: .fade) ?? 0
         grain = try c.decodeIfPresent(Double.self, forKey: .grain) ?? 0
+        sharpness = try c.decodeIfPresent(Double.self, forKey: .sharpness) ?? 0
+        vignette = try c.decodeIfPresent(Double.self, forKey: .vignette) ?? 0
         crop = try c.decodeIfPresent(CropRect.self, forKey: .crop) ?? .full
         straightenAngle = try c.decodeIfPresent(Double.self, forKey: .straightenAngle) ?? 0
         rotationQuarterTurns = try c.decodeIfPresent(Int.self, forKey: .rotationQuarterTurns) ?? 0
@@ -60,7 +80,9 @@ public nonisolated struct EditState: Codable, Sendable, Equatable {
 
     /// True if any tone/color/film adjustment is non-neutral (geometry excluded).
     public var hasToneAdjustments: Bool {
-        brightness != 0 || contrast != 0 || saturation != 0 || hue != 0 || fade != 0 || grain != 0
+        exposure != 0 || brightness != 0 || contrast != 0 || highlights != 0 || shadows != 0
+            || saturation != 0 || vibrance != 0 || hue != 0 || warmth != 0 || tint != 0
+            || fade != 0 || grain != 0 || sharpness != 0 || vignette != 0
     }
 }
 
