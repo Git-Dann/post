@@ -8,6 +8,9 @@ struct PostApp: App {
     /// extensions write to, so edits made there appear in the library. File-protected at rest.
     let modelContainer = ProjectStore.makeContainer()
 
+    /// Receives MetricKit performance + crash diagnostics, stored on device only (no upload).
+    private let metrics = MetricsMonitor()
+
     /// Drives a live re-tint of the whole tree when the accent is changed in Settings.
     @AppStorage(AccentChoice.storageKey) private var accentRaw = AccentChoice.amber.rawValue
 
