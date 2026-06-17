@@ -126,9 +126,9 @@ struct GalleryView: View {
 
     private var header: some View {
         HStack {
-            GlassIconButton("gearshape") { showSettings = true }
+            GlassIconButton("gearshape", label: "Settings") { showSettings = true }
             Spacer()
-            GlassIconButton("plus", prominent: true) { importTapped() }
+            GlassIconButton("plus", label: "Add photo", prominent: true) { importTapped() }
         }
         .padding(.horizontal, Theme.Space.l)
         .padding(.top, Theme.Space.s)

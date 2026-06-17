@@ -4,6 +4,7 @@ import SwiftUI
 /// reference editor (menu, bell, share, grid). Interactive glass + a charming press bounce.
 public struct GlassIconButton: View {
     private let systemName: String
+    private let label: String?
     private let action: () -> Void
     private let prominent: Bool
     private let size: CGFloat
@@ -11,8 +12,10 @@ public struct GlassIconButton: View {
     @State private var pressed = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    public init(_ systemName: String, prominent: Bool = false, size: CGFloat = 48, action: @escaping () -> Void) {
+    public init(_ systemName: String, label: String? = nil, prominent: Bool = false,
+                size: CGFloat = 48, action: @escaping () -> Void) {
         self.systemName = systemName
+        self.label = label
         self.prominent = prominent
         self.size = size
         self.action = action
@@ -39,7 +42,7 @@ public struct GlassIconButton: View {
         ._onButtonGesture { pressing in
             pressed = pressing
         } perform: {}
-        .accessibilityLabel(Text(systemName.replacingOccurrences(of: ".", with: " ")))
+        .accessibilityLabel(Text(label ?? systemName.replacingOccurrences(of: ".", with: " ")))
     }
 }
 

@@ -104,6 +104,8 @@ struct CropHandles: View {
                             .onChanged { v in active = handle; resize(handle, to: v.location, size: size) }
                             .onEnded { _ in active = nil; Haptics.selection() }
                     )
+                    .accessibilityLabel("\(handle.name) crop handle")
+                    .accessibilityHint("Drag to resize the crop")
             }
         }
     }
@@ -147,6 +149,15 @@ private enum Handle: Hashable {
     var isRight: Bool { self == .topRight || self == .bottomRight }
     var isTop: Bool { self == .topLeft || self == .topRight }
     var isBottom: Bool { self == .bottomLeft || self == .bottomRight }
+
+    var name: String {
+        switch self {
+        case .topLeft: "Top-left"
+        case .topRight: "Top-right"
+        case .bottomLeft: "Bottom-left"
+        case .bottomRight: "Bottom-right"
+        }
+    }
 
     func point(in rect: CGRect) -> CGPoint {
         switch self {

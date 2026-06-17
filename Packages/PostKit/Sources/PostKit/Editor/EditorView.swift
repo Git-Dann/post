@@ -184,6 +184,7 @@ public struct EditorView: View {
         .buttonStyle(.plain)
         .glassEffect(.regular.interactive(), in: .circle)
         .padding(Theme.Space.m)
+        .accessibilityLabel("Aspect ratio")
     }
 
     /// The (i) button that morphs (Liquid Glass) into the metadata panel and back. Same
@@ -268,6 +269,7 @@ public struct EditorView: View {
                     value: straightenBinding,
                     range: -0.4...0.4,
                     detent: 0.0175,   // ≈ 1° steps
+                    label: "Straighten",
                     soundEnabled: soundEnabled
                 )
                 .padding(.horizontal, Theme.Space.l)
@@ -279,6 +281,7 @@ public struct EditorView: View {
                         value: styleIntensityBinding,
                         range: 0...1,
                         detent: 0.025,
+                        label: "Style strength",
                         soundEnabled: soundEnabled,
                         onBegin: { model.beginInteraction() },
                         onCommit: { model.endInteraction() }
@@ -302,6 +305,7 @@ public struct EditorView: View {
                     value: dialBinding,
                     range: tool.range,
                     detent: tool.detent,
+                    label: tool.title,
                     soundEnabled: soundEnabled,
                     onBegin: { isAdjustingDial = true; isComparing = false; model.beginInteraction() },
                     onCommit: { isAdjustingDial = false; model.endInteraction() }
@@ -324,18 +328,18 @@ public struct EditorView: View {
     @ViewBuilder
     private var resetButton: some View {
         if showStyles && model.hasActiveStyle {
-            GlassIconButton("xmark") {
+            GlassIconButton("xmark", label: "Remove style") {
                 model.dismissStyle()
                 Haptics.impact(.rigid)
             }
             .transition(.scale.combined(with: .opacity))
         } else if showStyles {
-            GlassIconButton("xmark") {
+            GlassIconButton("xmark", label: "Close styles") {
                 showStyles = false
             }
             .transition(.scale.combined(with: .opacity))
         } else if let tool = model.selectedTool, model.value(of: tool) != 0 {
-            GlassIconButton("xmark") {
+            GlassIconButton("xmark", label: "Reset \(tool.title)") {
                 model.beginInteraction()
                 model.update(tool, to: 0)
                 model.endInteraction()
@@ -392,18 +396,18 @@ public struct EditorView: View {
 
     private var topBar: some View {
         HStack {
-            GlassIconButton("square.grid.2x2") { onCancel() }
+            GlassIconButton("square.grid.2x2", label: "Gallery") { onCancel() }
             Spacer()
             HStack(spacing: Theme.Space.s) {
-                GlassIconButton("arrow.uturn.backward") { model.undo() }
+                GlassIconButton("arrow.uturn.backward", label: "Undo") { model.undo() }
                     .disabled(!model.canUndo)
                     .opacity(model.canUndo ? 1 : 0.35)
-                GlassIconButton("arrow.uturn.forward") { model.redo() }
+                GlassIconButton("arrow.uturn.forward", label: "Redo") { model.redo() }
                     .disabled(!model.canRedo)
                     .opacity(model.canRedo ? 1 : 0.35)
             }
             Spacer()
-            GlassIconButton(isExporting ? "ellipsis" : "square.and.arrow.up") { share() }
+            GlassIconButton(isExporting ? "ellipsis" : "square.and.arrow.up", label: "Share") { share() }
                 .disabled(isExporting || exporter == nil)
                 .opacity(exporter == nil ? 0.35 : 1)
         }
@@ -466,10 +470,10 @@ public struct EditorView: View {
         // 54pt buttons + 10 vertical padding == the ToolBar's height, so the image doesn't shift
         // size between the normal tools and crop.
         HStack(spacing: Theme.Space.l) {
-            GlassIconButton("rotate.left", size: 54) { model.rotateQuarter(-1); Haptics.impact(.light) }
-            GlassIconButton("rotate.right", size: 54) { model.rotateQuarter(1); Haptics.impact(.light) }
-            GlassIconButton("arrow.left.and.right.righttriangle.left.righttriangle.right", size: 54) { model.toggleFlipH(); Haptics.impact(.light) }
-            GlassIconButton("arrow.up.and.down.righttriangle.up.righttriangle.down", size: 54) { model.toggleFlipV(); Haptics.impact(.light) }
+            GlassIconButton("rotate.left", label: "Rotate left", size: 54) { model.rotateQuarter(-1); Haptics.impact(.light) }
+            GlassIconButton("rotate.right", label: "Rotate right", size: 54) { model.rotateQuarter(1); Haptics.impact(.light) }
+            GlassIconButton("arrow.left.and.right.righttriangle.left.righttriangle.right", label: "Flip horizontally", size: 54) { model.toggleFlipH(); Haptics.impact(.light) }
+            GlassIconButton("arrow.up.and.down.righttriangle.up.righttriangle.down", label: "Flip vertically", size: 54) { model.toggleFlipV(); Haptics.impact(.light) }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
@@ -489,7 +493,7 @@ public struct EditorView: View {
         .tint(.white)
         .frame(maxWidth: .infinity)
         .overlay(alignment: .trailing) {
-            GlassIconButton("xmark") { model.cancelCrop() }
+            GlassIconButton("xmark", label: "Cancel crop") { model.cancelCrop() }
         }
         .padding(.horizontal, Theme.Space.l)
     }

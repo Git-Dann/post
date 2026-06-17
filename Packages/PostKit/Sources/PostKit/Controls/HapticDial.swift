@@ -9,6 +9,7 @@ public struct HapticDial: View {
     @Binding private var value: Double
     private let range: ClosedRange<Double>
     private let detent: Double
+    private let label: String
     private let soundEnabled: Bool
     private let onBegin: () -> Void
     private let onCommit: () -> Void
@@ -23,6 +24,7 @@ public struct HapticDial: View {
         value: Binding<Double>,
         range: ClosedRange<Double>,
         detent: Double,
+        label: String = "Adjustment",
         soundEnabled: Bool = false,
         onBegin: @escaping () -> Void = {},
         onCommit: @escaping () -> Void = {}
@@ -30,6 +32,7 @@ public struct HapticDial: View {
         self._value = value
         self.range = range
         self.detent = detent
+        self.label = label
         self.soundEnabled = soundEnabled
         self.onBegin = onBegin
         self.onCommit = onCommit
@@ -91,7 +94,7 @@ public struct HapticDial: View {
             (new == 0 && isBipolar) ? DialFeel.zeroHaptic : DialFeel.tickHaptic
         }
         .accessibilityElement()
-        .accessibilityLabel("Adjustment dial")
+        .accessibilityLabel("\(label) dial")
         .accessibilityValue(Text(String(format: "%.0f", value * 100)))
         .accessibilityAdjustableAction { direction in
             switch direction {
