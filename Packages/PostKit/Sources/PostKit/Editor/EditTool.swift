@@ -36,6 +36,20 @@ public enum EditTool: String, CaseIterable, Identifiable, Sendable {
 
     public var isGeometry: Bool { self == .crop }
 
+    /// Coarse grouping used to chunk the tool strip with subtle spacing — Auto · Light · Colour ·
+    /// Finishing — so a long scroll reads in sections without any extra navigation.
+    public enum Group: Sendable { case geometry, auto, light, colour, finishing }
+
+    public var group: Group {
+        switch self {
+        case .crop: .geometry
+        case .auto: .auto
+        case .exposure, .brightness, .contrast, .highlights, .shadows: .light
+        case .saturation, .vibrance, .warmth, .tint, .hue: .colour
+        case .sharpness, .vignette, .fade, .grain: .finishing
+        }
+    }
+
     public var title: String {
         switch self {
         case .crop: "Crop"

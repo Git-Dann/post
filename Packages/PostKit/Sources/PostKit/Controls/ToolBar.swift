@@ -69,7 +69,12 @@ public struct ToolBar: View {
                         actionChip(action)
                     }
                     if !actions.isEmpty { divider }
-                    ForEach(tools) { tool in
+                    ForEach(Array(tools.enumerated()), id: \.offset) { index, tool in
+                        // Subtle group spacing: a short, faint tick whenever the group changes
+                        // (Auto · Light · Colour · Finishing), so the strip reads in sections.
+                        if index > 0, tools[index - 1].group != tool.group {
+                            groupSeparator
+                        }
                         chip(tool).id(tool)
                     }
                 }
@@ -98,6 +103,17 @@ public struct ToolBar: View {
             Divider().frame(width: 32).overlay(.white.opacity(0.15))
         } else {
             Divider().frame(height: 32).overlay(.white.opacity(0.15))
+        }
+    }
+
+    /// A shorter, fainter tick than `divider` — separates adjustment groups within the dial tools
+    /// (vs. the main divider that splits the action chips from the tools).
+    @ViewBuilder
+    private var groupSeparator: some View {
+        if isVertical {
+            Divider().frame(width: 16).overlay(.white.opacity(0.08))
+        } else {
+            Divider().frame(height: 16).overlay(.white.opacity(0.08))
         }
     }
 
