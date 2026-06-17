@@ -16,7 +16,6 @@ public struct EditorView: View {
     @State private var shareItem: ShareItem?
     @State private var isExporting = false
     @State private var isComparing = false
-    @State private var isAdjustingDial = false
     @State private var showInfo = false
     @State private var celebrate = false
     @State private var donePressed = false
@@ -130,12 +129,20 @@ public struct EditorView: View {
                 MetalImageView(image: isComparing ? model.source : model.displayImage)
             }
         }
-        // Press and hold to compare against the original (disabled while cropping).
-        .onLongPressGesture(minimumDuration: 0.18, maximumDistance: 60) {
-        } onPressingChanged: { pressing in
-            guard model.hasEdits, !showStyles, !showInfo, !isAdjustingDial, !model.isCropping else { return }
-            withAnimation(Theme.Motion.snappy) { isComparing = pressing }
-            if pressing { Haptics.impact(.soft) }
+        // Tap the photo to compare against the original (a sticky toggle). This catcher sits BELOW
+        // the dial/controls overlay (declared earlier in the chain), so a tap on the dial scrubs and
+        // never flips the comparison — and grabbing the dial clears it instantly (see the dial's
+        // onBegin). The (i) and aspect controls are layered above too, so they win in their corners.
+        .overlay {
+            if !model.isCropping {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        guard model.hasEdits, !showStyles, !showInfo else { return }
+                        withAnimation(Theme.Motion.snappy) { isComparing.toggle() }
+                        Haptics.impact(.soft)
+                    }
+            }
         }
         .overlay {
             if celebrate {
@@ -164,6 +171,7 @@ public struct EditorView: View {
                 GlassPill("Original")
                     .padding(.top, Theme.Space.m)
                     .transition(.opacity.combined(with: .scale))
+                    .allowsHitTesting(false)   // tap passes through to the catcher to toggle back
             }
         }
         .overlay(alignment: .bottom) { imageControls }
@@ -315,8 +323,8 @@ public struct EditorView: View {
                     detent: tool.detent,
                     label: tool.title,
                     soundEnabled: soundEnabled,
-                    onBegin: { isAdjustingDial = true; isComparing = false; model.beginInteraction() },
-                    onCommit: { isAdjustingDial = false; model.endInteraction() }
+                    onBegin: { isComparing = false; model.beginInteraction() },
+                    onCommit: { model.endInteraction() }
                 )
                 .padding(.horizontal, Theme.Space.l)
             }
@@ -430,10 +438,12 @@ public struct EditorView: View {
             actions: [
                 ToolBarAction(id: "styles", title: "Styles", systemImage: "wand.and.stars", tinted: showStyles) {
                     // Tapping Styles always lands on the picker — if a look is active, step back to it.
+                    isComparing = false
                     if model.hasActiveStyle { model.dismissStyle() }
                     showStyles = true
                 },
                 ToolBarAction(id: "crop", title: "Crop & Rotate", systemImage: "crop.rotate", showsDot: geometryEdited) {
+                    isComparing = false
                     model.beginCrop()
                 }
             ],
