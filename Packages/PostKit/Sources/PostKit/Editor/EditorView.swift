@@ -130,35 +130,43 @@ public struct EditorView: View {
 
     // MARK: Framed image (with the controls living inside it)
 
-    @ViewBuilder
+    /// The image shown in the single persistent Metal view: the uncropped frame while cropping,
+    /// the original while comparing, otherwise the live edit.
+    private var baseImage: CIImage {
+        if model.isCropping { return model.cropDisplayImage }
+        return isComparing ? model.source : model.displayImage
+    }
+
     private var framedImage: some View {
-        Group {
+        // ONE MetalImageView for every mode — its source switches, but the view (and its MTKView)
+        // is never torn down, so entering/leaving crop is seamless (no blank-frame flash).
+        ZStack {
+            MetalImageView(image: baseImage)
+                .scaleEffect(model.isCropping ? 1 : zoomScale)
+                .offset(model.isCropping ? .zero : zoomOffset)
+            // Once a zoom settles, swap in a crisp full-res tile of the visible region for true
+            // pixel-peeping; it sits on top of (and matches) the scaled preview.
+            if !model.isCropping, let inspectTile, zoomScale > 1, !zoomGestureActive {
+                Image(decorative: inspectTile, scale: displayScale)
+                    .resizable()
+                    .scaledToFill()
+                    .allowsHitTesting(false)
+            }
+            // Crop chrome (dim + grid + move) overlays the same image while cropping.
             if model.isCropping {
                 CropCanvas(model: model)
-            } else {
-                ZStack {
-                    MetalImageView(image: isComparing ? model.source : model.displayImage)
-                        .scaleEffect(zoomScale)
-                        .offset(zoomOffset)
-                    // Once a zoom settles, swap in a crisp full-res tile of the visible region for
-                    // true pixel-peeping; it sits on top of (and matches) the scaled preview.
-                    if let inspectTile, zoomScale > 1, !zoomGestureActive {
-                        Image(decorative: inspectTile, scale: displayScale)
-                            .resizable()
-                            .scaledToFill()
-                            .allowsHitTesting(false)
-                    }
-                }
-                .background(   // measure the fit size (unscaled) for pan clamping + tile mapping
-                    GeometryReader { geo in
-                        Color.clear
-                            .onAppear { fitSize = geo.size }
-                            .onChange(of: geo.size) { _, s in fitSize = s }
-                    }
-                )
-                .gesture(inspectGesture)
+                    .transition(.opacity)
             }
         }
+        .background(   // measure the fit size (unscaled) for pan clamping + tile mapping
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { fitSize = geo.size }
+                    .onChange(of: geo.size) { _, s in fitSize = s }
+            }
+        )
+        // Pinch/pan to inspect when not cropping; while cropping, hand touches to the crop chrome.
+        .gesture(inspectGesture, including: model.isCropping ? .subviews : .all)
         .onChange(of: model.isCropping) { _, _ in resetZoom(animated: false) }
         .onChange(of: model.selectedTool) { _, _ in resetZoom(animated: false) }
         .onChange(of: model.state) { _, _ in inspectTile = nil; scheduleInspectTile() }
@@ -242,6 +250,10 @@ public struct EditorView: View {
         model.setCropAspect(ratio)
         Haptics.selection()
     }
+
+    /// Smooth spring for entering/leaving crop, so the card's aspect and the chrome morph rather
+    /// than snap (respects Reduce Motion).
+    private var cropMotion: Animation? { reduceMotion ? nil : .smooth(duration: 0.35) }
 
     // MARK: Pinch-to-inspect
 
@@ -563,7 +575,7 @@ public struct EditorView: View {
                 },
                 ToolBarAction(id: "crop", title: "Crop & Rotate", systemImage: "crop.rotate", showsDot: geometryEdited) {
                     isComparing = false
-                    model.beginCrop()
+                    withAnimation(cropMotion) { model.beginCrop() }
                 }
             ],
             selected: model.selectedTool,
@@ -636,7 +648,7 @@ public struct EditorView: View {
     private var cropActionBar: some View {
         Button {
             Haptics.impact(.soft)
-            model.commitCrop()
+            withAnimation(cropMotion) { model.commitCrop() }
         } label: {
             Text("Done")
                 .font(.system(.headline, design: .rounded))
@@ -647,7 +659,7 @@ public struct EditorView: View {
         .tint(.white)
         .frame(maxWidth: .infinity)
         .overlay(alignment: .trailing) {
-            GlassIconButton("xmark", label: "Cancel crop") { model.cancelCrop() }
+            GlassIconButton("xmark", label: "Cancel crop") { withAnimation(cropMotion) { model.cancelCrop() } }
         }
         .padding(.horizontal, Theme.Space.l)
     }

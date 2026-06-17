@@ -1,9 +1,11 @@
 import SwiftUI
 
-/// The crop image, dimmed surround, and rule-of-thirds frame — drawn inside the editor's rounded
-/// card. The corner grips live in `CropHandles`, drawn UNCLIPPED on top so they're never cut off by
-/// the card's rounded corners. The card is sized to the image's aspect, so this view's bounds ==
-/// the image rect and the crop is simply normalized to it.
+/// The crop *chrome* — dimmed surround, rule-of-thirds frame, and the move gesture — drawn as a
+/// transparent overlay on top of the editor's single persistent `MetalImageView` (which shows the
+/// uncropped image while cropping). Keeping the image in one Metal view across the crop toggle means
+/// no view teardown and so no blank-frame flash. The corner grips live in `CropHandles`, drawn
+/// UNCLIPPED on top. The card is sized to the image's aspect, so this view's bounds == the image rect
+/// and the crop is simply normalized to it.
 struct CropCanvas: View {
     let model: EditorModel
     @State private var dragStartOrigin: CGPoint?
@@ -14,7 +16,6 @@ struct CropCanvas: View {
         GeometryReader { geo in
             let size = geo.size
             ZStack {
-                MetalImageView(image: model.cropDisplayImage)
                 dimMask(size)
                 grid(rectIn(size))
                 // Drag inside the crop to reposition it. Sits below the dial overlay, so the dial
