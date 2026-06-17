@@ -73,8 +73,8 @@ struct CropCanvas: View {
     }
 }
 
-/// The four corner resize grips — Apple-style white circles, drawn unclipped over the card so they
-/// stay fully visible even when the crop fills the frame.
+/// The four corner resize grips — Photos-style L-shaped brackets, drawn unclipped over the card so
+/// they stay fully visible even when the crop fills the frame.
 struct CropHandles: View {
     let model: EditorModel
     @State private var active: Handle?
@@ -91,13 +91,7 @@ struct CropHandles: View {
                 Color.clear
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
-                    .overlay(
-                        Circle()
-                            .fill(.white)
-                            .frame(width: 22, height: 22)
-                            .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
-                            .overlay(Circle().strokeBorder(.black.opacity(0.05), lineWidth: 0.5))
-                    )
+                    .overlay(CornerBracket(handle: handle, active: active == handle))
                     .position(handle.point(in: rect))
                     .gesture(
                         DragGesture(minimumDistance: 0)
@@ -159,6 +153,16 @@ private enum Handle: Hashable {
         }
     }
 
+    /// The frame corner the bracket's elbow hugs — its arms then run inward along the two edges.
+    var bracketAlignment: Alignment {
+        switch self {
+        case .topLeft: .topLeading
+        case .topRight: .topTrailing
+        case .bottomLeft: .bottomLeading
+        case .bottomRight: .bottomTrailing
+        }
+    }
+
     func point(in rect: CGRect) -> CGPoint {
         switch self {
         case .topLeft: CGPoint(x: rect.minX, y: rect.minY)
@@ -166,6 +170,33 @@ private enum Handle: Hashable {
         case .bottomLeft: CGPoint(x: rect.minX, y: rect.maxY)
         case .bottomRight: CGPoint(x: rect.maxX, y: rect.maxY)
         }
+    }
+}
+
+/// A single L-shaped corner grip, like the brackets in Apple's Photos crop. Two rounded arms meet at
+/// an elbow that hugs the crop corner; the arms run inward along the two edges. Nudges larger while
+/// being dragged for a little tactile feedback.
+private struct CornerBracket: View {
+    let handle: Handle
+    let active: Bool
+
+    private let arm: CGFloat = 20
+    private let thickness: CGFloat = 3.5
+
+    var body: some View {
+        let align = handle.bracketAlignment
+        ZStack(alignment: align) {
+            RoundedRectangle(cornerRadius: thickness / 2).frame(width: arm, height: thickness)
+            RoundedRectangle(cornerRadius: thickness / 2).frame(width: thickness, height: arm)
+        }
+        .frame(width: arm, height: arm, alignment: align)
+        .foregroundStyle(.white)
+        .shadow(color: .black.opacity(0.4), radius: 3, y: 1)
+        // Shift the elbow from the bracket's centre onto the crop corner (centre of the 44pt frame).
+        .offset(x: handle.isLeft ? arm / 2 : -arm / 2,
+                y: handle.isTop ? arm / 2 : -arm / 2)
+        .scaleEffect(active ? 1.18 : 1, anchor: .center)
+        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: active)
     }
 }
 
