@@ -78,9 +78,10 @@ public struct ToolBar: View {
                 .padding(isVertical ? .horizontal : .vertical, 10)
             }
             .scrollClipDisabled()
-            // Soft fade at each end hints there's more beyond.
-            .overlay(alignment: isVertical ? .top : .leading) { edgeFade(leading: true) }
-            .overlay(alignment: isVertical ? .bottom : .trailing) { edgeFade(leading: false) }
+            // Soft fade at each end — a mask (like the dial) so chips fade to transparent at the
+            // edges regardless of scroll overflow. (A black overlay missed chips that overran the
+            // bounds via scrollClipDisabled, leaving a hard cut in the landscape rail.)
+            .mask(edgeFadeMask)
             .onAppear {
                 // Horizontal: start scrolled past Styles/Crop to the first dial tool. Vertical:
                 // leave Styles/Crop visible at the top (they're primary in the rail).
@@ -100,17 +101,18 @@ public struct ToolBar: View {
         }
     }
 
-    private func edgeFade(leading: Bool) -> some View {
+    /// Gradient mask that fades the strip/rail to transparent at both ends along the scroll axis.
+    private var edgeFadeMask: some View {
         LinearGradient(
-            colors: leading ? [.black, .clear] : [.clear, .black],
+            stops: [
+                .init(color: .clear, location: 0),
+                .init(color: .black, location: 0.06),
+                .init(color: .black, location: 0.94),
+                .init(color: .clear, location: 1)
+            ],
             startPoint: isVertical ? .top : .leading,
             endPoint: isVertical ? .bottom : .trailing
         )
-        // 28pt thick along the fade axis, and stretched FULL across the other axis so it spans the
-        // whole rail/strip edge-to-edge (a gradient won't expand the cross axis on its own).
-        .frame(width: isVertical ? nil : 28, height: isVertical ? 28 : nil)
-        .frame(maxWidth: isVertical ? .infinity : nil, maxHeight: isVertical ? nil : .infinity)
-        .allowsHitTesting(false)
     }
 
     private let chipSize: CGFloat = 54
