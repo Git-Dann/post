@@ -71,8 +71,13 @@ enum PhotoLibrary {
         }.data
     }
 
-    /// Save edited image data into the user's Photos library (Recents / All Photos — not a separate
-    /// folder). Add-only: requests just the lightweight "add" permission, never full read access.
+    /// The album Post files its exports into, so they're grouped (and easy to clear out en masse).
+    static let albumTitle = "Post"
+
+    /// Save edited image data to Photos. Always lands in the main library (Recents / All Photos);
+    /// when full access is granted it's also filed into a "Post" album so the user can find and
+    /// manage their edits together. Add-only at minimum — never escalates to full access just to
+    /// save (under add-only we can't read existing albums, so we skip the album to avoid duplicates).
     /// Returns false if the user declines or the write fails.
     static func save(imageData: Data) async -> Bool {
         var status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
@@ -80,12 +85,42 @@ enum PhotoLibrary {
             status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         }
         guard status == .authorized || status == .limited else { return false }
+
+        // Only manage the album when we already have full read-write access.
+        let album: PHAssetCollection? = PHPhotoLibrary.authorizationStatus(for: .readWrite) == .authorized
+            ? await findOrCreateAlbum() : nil
+        let box = AlbumBox(album: album)
+
         return await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
             PHPhotoLibrary.shared().performChanges {
                 let request = PHAssetCreationRequest.forAsset()
                 request.addResource(with: .photo, data: imageData, options: nil)
+                if let album = box.album, let placeholder = request.placeholderForCreatedAsset {
+                    PHAssetCollectionChangeRequest(for: album)?.addAssets([placeholder] as NSArray)
+                }
             } completionHandler: { success, _ in cont.resume(returning: success) }
         }
+    }
+
+    private struct AlbumBox: @unchecked Sendable { let album: PHAssetCollection? }
+    private final class IDBox: @unchecked Sendable { var id: String? }
+
+    /// Find the existing "Post" album, or create it. Requires full access (the caller checks).
+    private static func findOrCreateAlbum() async -> PHAssetCollection? {
+        let options = PHFetchOptions()
+        options.predicate = NSPredicate(format: "title = %@", albumTitle)
+        let existing = PHAssetCollection.fetchAssetCollections(with: .album, subtype: .albumRegular, options: options)
+        if let album = existing.firstObject { return album }
+
+        let box = IDBox()
+        let ok = await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
+            PHPhotoLibrary.shared().performChanges {
+                let request = PHAssetCollectionChangeRequest.creationRequestForAssetCollection(withTitle: albumTitle)
+                box.id = request.placeholderForCreatedAssetCollection.localIdentifier
+            } completionHandler: { success, _ in cont.resume(returning: success) }
+        }
+        guard ok, let id = box.id else { return nil }
+        return PHAssetCollection.fetchAssetCollections(withLocalIdentifiers: [id], options: nil).firstObject
     }
 
     /// For limited access: let the user add more photos to the selection Post can see.
