@@ -64,7 +64,7 @@ public enum EditTool: String, CaseIterable, Identifiable, Sendable {
         case .exposure: "plusminus.circle"
         case .brightness: "sun.max"
         case .contrast: "circle.lefthalf.filled"
-        case .highlights: "sun.max.circle.fill"   // bright tones (sun); distinct from brightness's bare sun
+        case .highlights: "sun.and.horizon.fill"   // bright tones; visually distinct from brightness's sun.max
         case .shadows: "moon.fill"                 // dark tones (moon)
         case .saturation: "drop"
         case .vibrance: "drop.fill"
