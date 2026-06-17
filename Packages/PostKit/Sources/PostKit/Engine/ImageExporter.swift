@@ -15,6 +15,10 @@ public actor ImageExporter {
         case jpeg
 
         var utType: UTType { self == .heic ? .heic : .jpeg }
+        // HEIC renders at 16-bit (10-bit-capable container) — a deliberate quality choice: fades and
+        // grain band visibly at 8-bit. The wider intermediate costs transient memory on very large
+        // photos, but it's a single image rendered off-main and released right after encode. JPEG is
+        // 8-bit (its own ceiling), so there's nothing to gain there.
         var ciFormat: CIFormat { self == .heic ? .RGBA16 : .RGBA8 }
     }
 
