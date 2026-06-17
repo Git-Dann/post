@@ -36,6 +36,9 @@ public nonisolated struct EditState: Codable, Sendable, Equatable {
     public var sharpness: Double = 0
     public var vignette: Double = 0
 
+    /// Selective scope: confines the tonal/colour adjustments to a region (finishing stays global).
+    public var scope: SelectiveScope = .whole
+
     // MARK: Geometry.
     public var crop: CropRect = .full
     /// Fine straightening, radians, ±~0.4 (≈ ±23°).
@@ -51,6 +54,7 @@ public nonisolated struct EditState: Codable, Sendable, Equatable {
         case exposure, brightness, contrast, highlights, shadows, saturation, vibrance, hue
         case warmth, tint, autoStrength
         case fade, grain, sharpness, vignette
+        case scope
         case crop, straightenAngle, rotationQuarterTurns, flippedHorizontally, flippedVertically
     }
 
@@ -73,6 +77,7 @@ public nonisolated struct EditState: Codable, Sendable, Equatable {
         grain = try c.decodeIfPresent(Double.self, forKey: .grain) ?? 0
         sharpness = try c.decodeIfPresent(Double.self, forKey: .sharpness) ?? 0
         vignette = try c.decodeIfPresent(Double.self, forKey: .vignette) ?? 0
+        scope = try c.decodeIfPresent(SelectiveScope.self, forKey: .scope) ?? .whole
         crop = try c.decodeIfPresent(CropRect.self, forKey: .crop) ?? .full
         straightenAngle = try c.decodeIfPresent(Double.self, forKey: .straightenAngle) ?? 0
         rotationQuarterTurns = try c.decodeIfPresent(Int.self, forKey: .rotationQuarterTurns) ?? 0

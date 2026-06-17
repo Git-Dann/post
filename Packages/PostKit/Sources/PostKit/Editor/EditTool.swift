@@ -36,6 +36,17 @@ public enum EditTool: String, CaseIterable, Identifiable, Sendable {
 
     public var isGeometry: Bool { self == .crop }
 
+    /// Tools whose effect the selective scope can confine (the tonal/colour group). Finishing
+    /// (sharpness/vignette/grain) and geometry always apply to the whole frame, so they don't
+    /// offer a scope chip. Auto resolves to tonal fields, so it's scopeable too.
+    public var isScopeable: Bool {
+        switch self {
+        case .auto, .exposure, .brightness, .contrast, .highlights, .shadows,
+             .saturation, .vibrance, .warmth, .tint, .hue, .fade: true
+        case .sharpness, .vignette, .grain, .crop: false
+        }
+    }
+
     public var title: String {
         switch self {
         case .crop: "Crop"

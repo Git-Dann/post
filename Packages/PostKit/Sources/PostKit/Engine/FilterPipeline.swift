@@ -11,23 +11,63 @@ public enum FilterPipeline {
 
     /// Build the edited image. `grainScale` enlarges grain cells (>1) so film grain reads at the
     /// same density on a downscaled preview as it will at full export resolution.
+    ///
+    /// `mask` is an optional subject mask (white = subject), in the *source's* coordinate space —
+    /// when `state.scope` is regional, the tonal/colour edit is composited over the untoned base
+    /// through it (the finishing pass stays global). Pass `nil` for a whole-photo edit.
     public static nonisolated func makeImage(
         source: CIImage,
         state: EditState,
-        grainScale: CGFloat = 1
+        grainScale: CGFloat = 1,
+        mask: CIImage? = nil
     ) -> CIImage {
-        var img = applyGeometry(source, state)        // geometry first → less work downstream
-        img = applyExposure(img, state)               // overall light, like a stop adjustment
-        img = applyWhiteBalance(img, state)           // warmth + tint (temperature)
-        img = applyHighlightShadow(img, state)        // recover/lift tonal extremes
-        img = applyColor(img, state)                  // contrast/brightness/saturation in one pass
-        img = applyVibrance(img, state)               // smart saturation after the flat saturation
-        img = applyHue(img, state)                    // hue rotate
-        img = applyFade(img, state)                   // lifted blacks AFTER color so the lift survives
-        img = applySharpen(img, state, grainScale: grainScale)  // crispness on near-final tones
+        let geo = applyGeometry(source, state)        // geometry first → less work downstream
+        var toned = applyExposure(geo, state)         // overall light, like a stop adjustment
+        toned = applyWhiteBalance(toned, state)       // warmth + tint (temperature)
+        toned = applyHighlightShadow(toned, state)    // recover/lift tonal extremes
+        toned = applyColor(toned, state)              // contrast/brightness/saturation in one pass
+        toned = applyVibrance(toned, state)           // smart saturation after the flat saturation
+        toned = applyHue(toned, state)                // hue rotate
+        toned = applyFade(toned, state)               // lifted blacks AFTER color so the lift survives
+
+        // Selective scope: confine the tonal/colour edit to a region, compositing it over the
+        // untoned base through the geometry-aligned subject mask. Finishing below stays global.
+        if state.scope.isRegional, let mask {
+            let geoMask = applyGeometry(mask, state)  // same transforms → aligns with `geo`
+            toned = composite(toned: toned, base: geo, mask: geoMask, scope: state.scope)
+        }
+
+        var img = applySharpen(toned, state, grainScale: grainScale)  // crispness on near-final tones
         img = applyVignette(img, state)               // darken the edges of the finished frame
         img = applyGrain(img, amount: state.grain, grainScale: grainScale) // grain last: overlay on final
         return img
+    }
+
+    // MARK: Selective composite
+
+    /// Blend the toned image over the untoned base through the subject mask. Background scope swaps
+    /// the layers (so the edit lands on everything *but* the subject) — no mask inversion needed.
+    static nonisolated func composite(toned: CIImage, base: CIImage, mask: CIImage,
+                                      scope: SelectiveScope) -> CIImage {
+        // Vision delivers the mask value in luminance; CIBlendWithMask keys off alpha. Normalize to
+        // an alpha mask so the composite is correct either way (and so a test mask works too).
+        let toAlpha = CIFilter.maskToAlpha()
+        toAlpha.inputImage = mask
+        let alphaMask = toAlpha.outputImage ?? mask
+
+        let blend = CIFilter.blendWithMask()
+        blend.maskImage = alphaMask
+        switch scope {
+        case .subject:
+            blend.inputImage = toned          // shown where the mask (subject) is white
+            blend.backgroundImage = base
+        case .background:
+            blend.inputImage = base           // base kept on the subject…
+            blend.backgroundImage = toned     // …edit shown everywhere the mask is black
+        case .whole:
+            return toned
+        }
+        return (blend.outputImage ?? toned).cropped(to: base.extent)
     }
 
     // MARK: Geometry

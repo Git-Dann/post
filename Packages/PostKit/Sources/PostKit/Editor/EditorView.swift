@@ -545,6 +545,7 @@ public struct EditorView: View {
                     .padding(.bottom, Theme.Space.s)
                 }
             } else if let tool = model.selectedTool {
+                if tool.isScopeable { scopeChip }
                 readout
                 HapticDial(
                     value: dialBinding,
@@ -830,6 +831,49 @@ public struct EditorView: View {
             GlassIconButton("xmark", label: "Cancel crop") { withAnimation(cropMotion) { model.cancelCrop() } }
         }
         .padding(.horizontal, Theme.Space.l)
+    }
+
+    /// The selective-scope chip shown above the readout while a tonal tool is active: tap to confine
+    /// the tonal/colour edit to the Subject or Background (on-device Vision), or keep it whole-photo.
+    /// Reuses the crop aspect-menu pattern so it stays out of the way until you reach for it.
+    private var scopeChip: some View {
+        let regional = model.scope.isRegional
+        let noSubject = model.maskUnavailable && regional && !model.isPreparingMask
+        return Menu {
+            Picker("Adjust", selection: scopeBinding) {
+                ForEach(SelectiveScope.allCases, id: \.self) { s in
+                    Label(s.title, systemImage: s.systemImage).tag(s)
+                }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                if model.isPreparingMask {
+                    ProgressView().controlSize(.mini).tint(.white)
+                } else {
+                    Image(systemName: noSubject ? "exclamationmark.triangle" : model.scope.systemImage)
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                Text(noSubject ? "No subject" : model.scope.shortTitle)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).opacity(0.55)
+            }
+            .foregroundStyle(noSubject ? .orange : (regional ? Theme.accent : .white.opacity(0.85)))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: .capsule)
+        .accessibilityLabel("Adjustment area")
+        .accessibilityValue(model.scope.title)
+        .accessibilityHint("Confines tonal edits to the subject or background")
+    }
+
+    private var scopeBinding: Binding<SelectiveScope> {
+        Binding(
+            get: { model.scope },
+            set: { model.setScope($0); Haptics.selection() }
+        )
     }
 
     private var readout: some View {

@@ -26,6 +26,7 @@ struct EditStateTests {
         s.highlights = -0.44; s.shadows = 0.55; s.saturation = -0.66
         s.vibrance = 0.77; s.hue = -0.12; s.warmth = 0.34; s.tint = -0.56
         s.fade = 0.6; s.grain = 0.5; s.sharpness = 0.7; s.vignette = 0.8
+        s.scope = .background
         s.crop = CropRect(x: 0.1, y: 0.15, width: 0.7, height: 0.6)
         s.straightenAngle = 0.2; s.rotationQuarterTurns = 3
         s.flippedHorizontally = true; s.flippedVertically = true
@@ -110,6 +111,34 @@ struct FilterPipelineTests {
             #expect(out != neutral, "Tool \(tool.title) produced no visible change")
             #expect(s.hasToneAdjustments, "Tool \(tool.title) isn't reflected in hasToneAdjustments")
         }
+    }
+
+    @Test("Selective scope confines the tonal edit to a region")
+    func selectiveScope() {
+        let src = checkerboard()
+        let ctx = CIContext(options: [.cacheIntermediates: false])
+        // Half-and-half mask: opaque white "subject" on the left, black on the right.
+        let white = CIImage(color: .white).cropped(to: CGRect(x: 0, y: 0, width: 32, height: 64))
+        let black = CIImage(color: .black).cropped(to: CGRect(x: 32, y: 0, width: 32, height: 64))
+        let mask = white.composited(over: black).cropped(to: CGRect(x: 0, y: 0, width: 64, height: 64))
+
+        var s = EditState()
+        s.saturation = -1            // strong, obvious change (→ grayscale) so masking is visible
+
+        var whole = s; whole.scope = .whole
+        var subject = s; subject.scope = .subject
+        var background = s; background.scope = .background
+
+        let wholeBytes = bytes(FilterPipeline.makeImage(source: src, state: whole), ctx)
+        let subjBytes = bytes(FilterPipeline.makeImage(source: src, state: subject, mask: mask), ctx)
+        let bgBytes = bytes(FilterPipeline.makeImage(source: src, state: background, mask: mask), ctx)
+
+        #expect(subjBytes != wholeBytes)   // masking changed the result vs. whole-photo
+        #expect(bgBytes != wholeBytes)
+        #expect(subjBytes != bgBytes)      // subject and background are complementary regions
+        // No mask supplied → falls back to a whole-photo edit even when scope is regional.
+        let subjNoMask = bytes(FilterPipeline.makeImage(source: src, state: subject), ctx)
+        #expect(subjNoMask == wholeBytes)
     }
 
     @Test("Tone + film adjustments render to a valid image")

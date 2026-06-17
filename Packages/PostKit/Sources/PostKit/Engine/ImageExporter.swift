@@ -57,8 +57,12 @@ public actor ImageExporter {
             throw ExportError.decodeFailed
         }
 
+        // Selective edits: recompute the subject mask at full resolution so the export matches the
+        // preview exactly (the cached preview mask is downscaled). On-device, nothing leaves here.
+        let mask = state.scope.isRegional ? SubjectMask.foregroundMask(for: source) : nil
+
         // Full resolution → native grain (grainScale 1).
-        var output = FilterPipeline.makeImage(source: source, state: state, grainScale: 1)
+        var output = FilterPipeline.makeImage(source: source, state: state, grainScale: 1, mask: mask)
         // Optional resize for export presets (web/medium). High-quality Lanczos.
         if let maxDimension {
             let longest = max(output.extent.width, output.extent.height)

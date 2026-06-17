@@ -93,6 +93,51 @@ public final class EditorModel: Identifiable {
         recompute()
     }
 
+    // MARK: Selective scope
+
+    /// CIImage isn't `Sendable`; it's immutable here, so box it to cross to the detached
+    /// segmentation task (and back) without tripping strict concurrency.
+    private struct ImageBox: @unchecked Sendable { let image: CIImage }
+
+    /// Cached subject mask for the preview source (white = subject), computed off-main on first use.
+    private var subjectMask: CIImage?
+    private var maskRequested = false
+    /// True while the subject mask is being computed (the chip shows a brief progress state).
+    public private(set) var isPreparingMask = false
+    /// True once segmentation finished and found no subject — lets the UI explain the no-op.
+    public private(set) var maskUnavailable = false
+
+    /// The current selective scope (mirrors `state.scope` for the view).
+    public var scope: SelectiveScope { state.scope }
+
+    /// Change the selective scope. The first time a region is chosen this kicks off on-device
+    /// subject segmentation; the preview re-renders (masked) as soon as the mask is ready.
+    public func setScope(_ newScope: SelectiveScope) {
+        guard state.scope != newScope else { return }
+        beginInteraction()
+        state.scope = newScope
+        endInteraction()
+        if newScope.isRegional { ensureSubjectMask() }
+        recompute()
+    }
+
+    private func ensureSubjectMask() {
+        guard subjectMask == nil, !maskRequested else { return }
+        maskRequested = true
+        isPreparingMask = true
+        maskUnavailable = false
+        let box = ImageBox(image: source)
+        Task {
+            let result = await Task.detached(priority: .userInitiated) { () -> ImageBox? in
+                SubjectMask.foregroundMask(for: box.image).map(ImageBox.init)
+            }.value
+            self.subjectMask = result?.image
+            self.maskUnavailable = (result == nil)
+            self.isPreparingMask = false
+            self.recompute()
+        }
+    }
+
     // MARK: Geometry
 
     public func apply(crop: CropRect, straighten: Double, quarterTurns: Int,
@@ -218,6 +263,7 @@ public final class EditorModel: Identifiable {
         activeStyle = nil
         undoStack.removeAll()
         redoStack.removeAll()
+        if state.scope.isRegional { ensureSubjectMask() }
         recompute()
     }
 
@@ -307,7 +353,9 @@ public final class EditorModel: Identifiable {
     }
 
     private func recompute() {
-        displayImage = FilterPipeline.makeImage(source: source, state: state, grainScale: grainScale)
+        let mask = state.scope.isRegional ? subjectMask : nil
+        displayImage = FilterPipeline.makeImage(source: source, state: state,
+                                                grainScale: grainScale, mask: mask)
     }
 
     private static let thumbnailContext = CIContext(options: [.cacheIntermediates: false])
