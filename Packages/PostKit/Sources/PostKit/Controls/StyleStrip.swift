@@ -8,36 +8,47 @@ import UIKit
 public struct StyleStrip: View {
     private let source: CIImage
     private let styles: [Style]
+    /// The currently-applied look, so the strip opens scrolled to (and highlighting) it.
+    private let activeStyleID: String?
     private let onPick: (Style) -> Void
 
     @State private var thumbnails: [String: UIImage] = [:]
 
     private static let context = CIContext(options: [.cacheIntermediates: false])
 
-    public init(source: CIImage, styles: [Style], onPick: @escaping (Style) -> Void) {
+    public init(source: CIImage, styles: [Style], activeStyleID: String? = nil,
+                onPick: @escaping (Style) -> Void) {
         self.source = source
         self.styles = styles
+        self.activeStyleID = activeStyleID
         self.onPick = onPick
     }
 
     public var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(alignment: .top, spacing: Theme.Space.m) {
-                // Baselines first: OG (the original) and ZERO (a flat "Process Zero" base).
-                ForEach(Style.baselines) { chip($0) }
-                // Divider, then the house looks.
-                divider
-                ForEach(houseStyles) { chip($0) }
-                // A divider before each collaborator collection (e.g. "Chunk").
-                ForEach(collections, id: \.name) { group in
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .center, spacing: Theme.Space.m) {
+                    // Baselines first: OG (the original) and ZERO (a flat "Process Zero" base).
+                    ForEach(Style.baselines) { chip($0) }
+                    // Divider, then the house looks.
                     divider
-                    ForEach(group.styles) { chip($0) }
+                    ForEach(houseStyles) { chip($0) }
+                    // A divider before each collaborator collection (e.g. "Chunk").
+                    ForEach(collections, id: \.name) { group in
+                        divider
+                        ForEach(group.styles) { chip($0) }
+                    }
                 }
+                .padding(.horizontal, Theme.Space.l)
             }
-            .padding(.horizontal, Theme.Space.l)
-        }
-        .task(id: source.extent.debugDescription) {
-            renderThumbnails()
+            .task(id: source.extent.debugDescription) {
+                renderThumbnails()
+            }
+            .onAppear {
+                // Remember where you were: open the list at the active look rather than the front.
+                guard let activeStyleID else { return }
+                DispatchQueue.main.async { proxy.scrollTo(activeStyleID, anchor: .center) }
+            }
         }
     }
 
@@ -63,7 +74,8 @@ public struct StyleStrip: View {
     }
 
     private func chip(_ style: Style) -> some View {
-        Button {
+        let isActive = style.id == activeStyleID
+        return Button {
             onPick(style)
             Haptics.impact(.soft)
         } label: {
@@ -81,15 +93,27 @@ public struct StyleStrip: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(.white.opacity(0.15), lineWidth: 1)
+                        .strokeBorder(isActive ? Theme.accent : .white.opacity(0.15),
+                                      lineWidth: isActive ? 2.5 : 1)
                 )
                 Text(style.name)
                     .font(.system(.caption, design: .rounded).weight(.medium))
-                    .foregroundStyle(.white.opacity(0.85))
+                    .foregroundStyle(isActive ? Theme.accent : .white.opacity(0.85))
             }
         }
         .buttonStyle(.plain)
+        .id(style.id)
+        // Dock-style magnifier: chips sit at full size in the body of the strip and taper — shrink
+        // and dim — as they scroll toward either edge. Native `scrollTransition` (phase.value is 0
+        // at rest, ±1 at the edges) interpolates it smoothly while you scroll.
+        .scrollTransition { content, phase in
+            let v = min(max(phase.value, -1), 1)
+            return content
+                .scaleEffect(1 - abs(v) * 0.22)   // full size at rest, ~0.78 at the edges
+                .opacity(1 - abs(v) * 0.45)
+        }
         .accessibilityLabel("\(style.name) style")
+        .accessibilityAddTraits(isActive ? [.isSelected] : [])
     }
 
     private func renderThumbnails() {

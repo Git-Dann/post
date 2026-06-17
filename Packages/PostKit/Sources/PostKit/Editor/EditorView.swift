@@ -13,6 +13,11 @@ public struct EditorView: View {
 
     @State private var styleProvider: StyleProvider
     @State private var showStyles = false
+    /// Browsing the styles list while a look is still applied (so the list shows instead of the
+    /// intensity dial, and reopening the list lands on the active look rather than the front).
+    @State private var browsingStyles = false
+    /// One-time entrance: the dial slot slides up from the image on first appear.
+    @State private var revealControls = false
     @State private var shareItem: ShareItem?
     @State private var isExporting = false
     @State private var isComparing = false
@@ -84,6 +89,8 @@ public struct EditorView: View {
             Text("Something went wrong rendering the image. Please try again.")
         }
         .task {
+            // Slide the dial up from the image into place on first load.
+            withAnimation(reduceMotion ? nil : .smooth(duration: 0.4)) { revealControls = true }
             await styleProvider.loadIfNeeded()
             #if DEBUG
             let args = ProcessInfo.processInfo.arguments
@@ -481,7 +488,7 @@ public struct EditorView: View {
                 )
                 .padding(.horizontal, Theme.Space.l)
             } else if showStyles {
-                if model.hasActiveStyle {
+                if model.hasActiveStyle && !browsingStyles {
                     // Selected style: the dial now controls the style's intensity.
                     styleReadout
                     HapticDial(
@@ -495,16 +502,22 @@ public struct EditorView: View {
                     )
                     .padding(.horizontal, Theme.Space.l)
                 } else {
-                    StyleStrip(source: model.source, styles: styleProvider.styles) { style in
-                        // OG is a clean revert (no intensity dial); every other look applies as an
-                        // active style the dial can then scale. No animation — instant.
-                        if style.id == Style.original.id {
-                            model.revertToOriginal()
-                        } else {
-                            model.applyStyle(style)
+                    // The list — opens scrolled to the active look, which stays applied while you browse.
+                    StyleStrip(source: model.source, styles: styleProvider.styles,
+                               activeStyleID: model.activeStyle?.id) { style in
+                        withAnimation(Theme.Motion.snappy) {
+                            // OG is a clean revert (no intensity dial); every other look applies as
+                            // an active style the dial can then scale.
+                            if style.id == Style.original.id {
+                                model.revertToOriginal()
+                            } else {
+                                model.applyStyle(style)
+                            }
+                            browsingStyles = false
                         }
                     }
                     .padding(.bottom, Theme.Space.s)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             } else if let tool = model.selectedTool {
                 readout
@@ -529,6 +542,9 @@ public struct EditorView: View {
                     .allowsHitTesting(false)
             }
         }
+        // First-load entrance: slide up from the image and fade in (see revealControls in `.task`).
+        .offset(y: revealControls ? 0 : 28)
+        .opacity(revealControls ? 1 : 0)
       }
     }
 
@@ -536,15 +552,17 @@ public struct EditorView: View {
     /// clears the current tool's edit. Hidden when there's nothing to clear.
     @ViewBuilder
     private var resetButton: some View {
-        if showStyles && model.hasActiveStyle {
+        if showStyles && model.hasActiveStyle && !browsingStyles {
+            // Intensity-dial mode → the X removes the look (back to the list).
             GlassIconButton("xmark", label: "Remove style") {
-                model.dismissStyle()
+                withAnimation(Theme.Motion.snappy) { model.dismissStyle() }
                 Haptics.impact(.rigid)
             }
             .transition(.scale.combined(with: .opacity))
         } else if showStyles {
+            // List mode → the X closes styles (back to the tools), keeping any applied look.
             GlassIconButton("xmark", label: "Close styles") {
-                showStyles = false
+                withAnimation(Theme.Motion.snappy) { showStyles = false; browsingStyles = false }
             }
             .transition(.scale.combined(with: .opacity))
         } else if let tool = model.selectedTool, model.value(of: tool) != 0 {
@@ -654,10 +672,13 @@ public struct EditorView: View {
         ToolBar(
             actions: [
                 ToolBarAction(id: "styles", title: "Styles", systemImage: "wand.and.stars", tinted: showStyles) {
-                    // Tapping Styles always lands on the picker — if a look is active, step back to it.
+                    // Tapping Styles opens the list. If a look is active, BROWSE it: keep the look
+                    // applied and land the list on that look (don't revert or jump to the front).
                     isComparing = false
-                    if model.hasActiveStyle { model.dismissStyle() }
-                    showStyles = true
+                    withAnimation(Theme.Motion.snappy) {
+                        browsingStyles = true
+                        showStyles = true
+                    }
                 },
                 ToolBarAction(id: "crop", title: "Crop & Rotate", systemImage: "crop.rotate", showsDot: geometryEdited) {
                     isComparing = false
@@ -677,6 +698,7 @@ public struct EditorView: View {
         // Reaching for a tool turns the active style into the manual starting point.
         if model.hasActiveStyle { model.bakeStyle() }
         showStyles = false
+        browsingStyles = false
         // Tapping the already-selected tool that carries an edit reverts it to 0 — the same action
         // as its X, just on the chip itself. (Not when arriving from Styles mode, where the tap is
         // really a selection.)
