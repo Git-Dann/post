@@ -1,5 +1,6 @@
 import Testing
 import CoreImage
+import CoreImage.CIFilterBuiltins
 import Foundation
 import PostKit
 
@@ -16,6 +17,21 @@ struct EditStateTests {
         let data = try JSONEncoder().encode(state)
         let decoded = try JSONDecoder().decode(EditState.self, from: data)
         #expect(decoded == state)
+    }
+
+    @Test("Round-trips every field through Codable")
+    func codableAllFields() throws {
+        var s = EditState()
+        s.exposure = 0.11; s.brightness = 0.22; s.contrast = 0.33
+        s.highlights = -0.44; s.shadows = 0.55; s.saturation = -0.66
+        s.vibrance = 0.77; s.hue = -0.12; s.warmth = 0.34; s.tint = -0.56
+        s.fade = 0.6; s.grain = 0.5; s.sharpness = 0.7; s.vignette = 0.8
+        s.crop = CropRect(x: 0.1, y: 0.15, width: 0.7, height: 0.6)
+        s.straightenAngle = 0.2; s.rotationQuarterTurns = 3
+        s.flippedHorizontally = true; s.flippedVertically = true
+
+        let decoded = try JSONDecoder().decode(EditState.self, from: JSONEncoder().encode(s))
+        #expect(decoded == s)   // catches any field missed in CodingKeys / decodeIfPresent
     }
 
     @Test("Identity and tone detection")
@@ -62,6 +78,38 @@ struct FilterPipelineTests {
         let out = FilterPipeline.makeImage(source: src, state: s)
         #expect(abs(out.extent.width - 100) < 1)
         #expect(abs(out.extent.height - 200) < 1)
+    }
+
+    /// A patterned source (edges + two colours + tonal range) so every kind of adjustment has
+    /// something to act on — a flat colour wouldn't reveal e.g. sharpness.
+    private func checkerboard(_ w: CGFloat = 64, _ h: CGFloat = 64) -> CIImage {
+        let f = CIFilter.checkerboardGenerator()
+        f.width = 8
+        f.color0 = CIColor(red: 0.15, green: 0.25, blue: 0.5)
+        f.color1 = CIColor(red: 0.85, green: 0.7, blue: 0.4)
+        return (f.outputImage ?? CIImage(color: .gray)).cropped(to: CGRect(x: 0, y: 0, width: w, height: h))
+    }
+
+    private func bytes(_ image: CIImage, _ ctx: CIContext) -> Data? {
+        guard let cg = ctx.createCGImage(image, from: image.extent) else { return nil }
+        return cg.dataProvider?.data as Data?
+    }
+
+    @Test("Every dial tool changes the rendered image")
+    func toolsAffectOutput() {
+        let src = checkerboard()
+        let ctx = CIContext(options: [.cacheIntermediates: false])
+        let neutral = bytes(FilterPipeline.makeImage(source: src, state: EditState()), ctx)
+        #expect(neutral != nil)
+        // Grain is excluded: its Metal kernel loads from the host app's metallib, absent in the test
+        // bundle, so it's a no-op here (verified visually on-device instead).
+        for tool in EditTool.dialTools where tool != .grain {
+            var s = EditState()
+            tool.set(tool.range.upperBound, in: &s)
+            let out = bytes(FilterPipeline.makeImage(source: src, state: s), ctx)
+            #expect(out != neutral, "Tool \(tool.title) produced no visible change")
+            #expect(s.hasToneAdjustments, "Tool \(tool.title) isn't reflected in hasToneAdjustments")
+        }
     }
 
     @Test("Tone + film adjustments render to a valid image")

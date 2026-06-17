@@ -17,6 +17,14 @@ let package = Package(
                 .defaultIsolation(MainActor.self),
                 .swiftLanguageMode(.v6)
             ]
+        ),
+        .testTarget(
+            name: "PostKitTests",
+            dependencies: ["PostKit"],
+            swiftSettings: [
+                .defaultIsolation(MainActor.self),
+                .swiftLanguageMode(.v6)
+            ]
         )
     ]
 )

@@ -140,35 +140,12 @@ targets:
         MTL_COMPILER_FLAGS: "-fcikernel"
         MTLLINKER_FLAGS: "-fcikernel"
 
-  PostKitTests:
-    type: bundle.unit-test
-    platform: iOS
-    sources:
-      - path: Tests/PostKitTests
-    dependencies:
-      - package: PostKit
-    settings:
-      base:
-        GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: co.gitwork.post.PostKitTests
-
 schemes:
   Post:
     build:
       targets:
         Post: all
-        PostKitTests: [test]
     run:
       config: Debug
-    test:
-      config: Debug
-      targets:
-        - PostKitTests
-  PostKitTests:
-    build:
-      targets:
-        PostKitTests: [test]
-    test:
-      config: Debug
-      targets:
-        - PostKitTests
+  # Engine tests live in the PostKit package (Packages/PostKit/Tests/PostKitTests) and run via the
+  # auto-generated "PostKit" scheme: xcodebuild test -scheme PostKit …
