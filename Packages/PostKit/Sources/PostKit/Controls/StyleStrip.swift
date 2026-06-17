@@ -13,8 +13,14 @@ public struct StyleStrip: View {
     private let onPick: (Style) -> Void
 
     @State private var thumbnails: [String: UIImage] = [:]
+    /// Drives the staggered entrance: chips rise + fade in sequentially when the list opens.
+    @State private var revealed = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let context = CIContext(options: [.cacheIntermediates: false])
+
+    /// All chips in display order, so each gets a stagger delay by its position.
+    private var orderedStyles: [Style] { Style.baselines + houseStyles + collections.flatMap(\.styles) }
 
     public init(source: CIImage, styles: [Style], activeStyleID: String? = nil,
                 onPick: @escaping (Style) -> Void) {
@@ -45,6 +51,8 @@ public struct StyleStrip: View {
                 renderThumbnails()
             }
             .onAppear {
+                // Quick staggered entrance: the chips rise + fade in sequentially as the list opens.
+                revealed = true
                 // Remember where you were: open the list at the active look rather than the front.
                 guard let activeStyleID else { return }
                 DispatchQueue.main.async { proxy.scrollTo(activeStyleID, anchor: .center) }
@@ -75,6 +83,8 @@ public struct StyleStrip: View {
 
     private func chip(_ style: Style) -> some View {
         let isActive = style.id == activeStyleID
+        // Stagger by position so the chips rise in sequence; capped so a far chip never waits too long.
+        let stagger = min(Double(orderedStyles.firstIndex(of: style) ?? 0) * 0.04, 0.4)
         return Button {
             onPick(style)
             Haptics.impact(.soft)
@@ -112,6 +122,10 @@ public struct StyleStrip: View {
                 .scaleEffect(1 - abs(v) * 0.22)   // full size at rest, ~0.78 at the edges
                 .opacity(1 - abs(v) * 0.45)
         }
+        // Staggered entrance: each chip rises + fades in, sequentially, when the list opens.
+        .offset(y: revealed ? 0 : 18)
+        .opacity(revealed ? 1 : 0)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.3).delay(stagger), value: revealed)
         .accessibilityLabel("\(style.name) style")
         .accessibilityAddTraits(isActive ? [.isSelected] : [])
     }
