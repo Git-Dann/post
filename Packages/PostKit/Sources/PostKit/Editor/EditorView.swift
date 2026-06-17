@@ -578,6 +578,7 @@ public struct EditorView: View {
                     detent: tool.detent,
                     label: tool.title,
                     soundEnabled: soundEnabled,
+                    tint: tool.dialTint,
                     onBegin: { isComparing = false; model.beginInteraction() },
                     onCommit: { model.endInteraction() }
                 )

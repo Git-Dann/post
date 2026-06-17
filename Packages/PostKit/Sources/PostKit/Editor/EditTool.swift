@@ -105,6 +105,17 @@ public enum EditTool: String, CaseIterable, Identifiable, Sendable {
 
     public var isBipolar: Bool { range.lowerBound < 0 }
 
+    /// A subtle colour hint for the dial ruler — only for tools with a real colour axis. The rest
+    /// keep their neutral ruler (a colour would be arbitrary and would cheapen the machined look).
+    public var dialTint: DialTint? {
+        switch self {
+        case .warmth: .warmth
+        case .tint: .tint
+        case .hue: .spectrum
+        default: nil
+        }
+    }
+
     public func value(in state: EditState) -> Double {
         switch self {
         case .auto: state.autoStrength
