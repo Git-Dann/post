@@ -20,6 +20,7 @@ public struct EditorView: View {
     @State private var showInfo = false
     @State private var celebrate = false
     @State private var donePressed = false
+    @State private var exportFailed = false
     @Namespace private var infoGlass
     @AppStorage("soundEffectsEnabled") private var soundEnabled = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -73,6 +74,11 @@ public struct EditorView: View {
         }
         .statusBarHidden()
         .sheet(item: $shareItem) { item in ActivityView(items: [item.url]) }
+        .alert("Couldn't export this photo", isPresented: $exportFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Something went wrong rendering the image. Please try again.")
+        }
         .task {
             await styleProvider.loadIfNeeded()
             #if DEBUG
@@ -513,6 +519,9 @@ public struct EditorView: View {
                 Haptics.notify(.success)
                 triggerCelebrate()
                 shareItem = ShareItem(url: url)
+            } else {
+                Haptics.notify(.error)
+                exportFailed = true
             }
         }
     }

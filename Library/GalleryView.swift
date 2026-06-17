@@ -34,6 +34,7 @@ struct GalleryView: View {
     @State private var showPrimer = false
     @State private var infoSheet: InfoSheet?
     @State private var floatIcon = false
+    @State private var loadError = false
     @AppStorage(ExportPrefs.removeLocationKey, store: .postShared) private var removeLocation = true
     @AppStorage("hasPrimedPhotoAccess") private var hasPrimedPhotoAccess = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -67,6 +68,11 @@ struct GalleryView: View {
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(item: $infoSheet) { sheet in MetadataView(rows: sheet.rows) }
+        .alert("Couldn't open photo", isPresented: $loadError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("This photo couldn't be loaded — it may have been removed or isn't downloaded from iCloud yet.")
+        }
         // Out-of-process picker: no photo-library permission needed, supports one or many, and is
         // the most private option — Post only ever sees the photos you pick. (Using `.shared()`
         // here forced the in-process picker, which needed authorization and could present black.)
@@ -227,12 +233,17 @@ struct GalleryView: View {
         }
         if created.count == 1, let (model, project) = created.first {
             session = EditorSession(model: model, project: project)
+        } else if created.isEmpty && !datas.isEmpty {
+            loadError = true   // every chosen photo failed to import
         }
     }
 
     private func open(_ project: Project) {
         guard let data = Storage.readOriginal(fileName: project.originalFileName),
-              let loaded = ImageLoader.makeLoaded(from: data) else { return }
+              let loaded = ImageLoader.makeLoaded(from: data) else {
+            loadError = true   // original missing/corrupt/locked — don't fail silently
+            return
+        }
         let model = EditorModel(source: loaded.preview, originalData: data, previewScale: loaded.previewScale)
         model.load(recipe: ProjectStore.recipe(for: project))
         session = EditorSession(model: model, project: project)
