@@ -1,14 +1,11 @@
 import SwiftUI
 
-/// The in-place crop interaction drawn over the editor's framed image: a draggable crop frame with
-/// corner handles, a rule-of-thirds grid, and a dimmed surround. The editor sizes the card to the
-/// crop preview's aspect, so this view's bounds == the image rect and the crop is simply normalized
-/// to it (no letterbox maths). Working state lives on the model; Done commits it.
+/// The crop image, dimmed surround, and rule-of-thirds frame — drawn inside the editor's rounded
+/// card. The corner grips live in `CropHandles`, drawn UNCLIPPED on top so they're never cut off by
+/// the card's rounded corners. The card is sized to the image's aspect, so this view's bounds ==
+/// the image rect and the crop is simply normalized to it.
 struct CropCanvas: View {
     let model: EditorModel
-    private let minSize: CGFloat = 0.12
-
-    @State private var activeHandle: Handle?
     @State private var dragStartOrigin: CGPoint?
 
     private var crop: CGRect { model.cropWorkingRect }
@@ -19,10 +16,21 @@ struct CropCanvas: View {
             ZStack {
                 MetalImageView(image: model.cropDisplayImage)
                 dimMask(size)
-                cropFrame(size)
+                grid(rectIn(size))
+                // Drag inside the crop to reposition it. Sits below the dial overlay, so the dial
+                // still receives touches; outside the crop (dim area) doesn't move anything.
+                Rectangle().fill(.clear)
+                    .frame(width: crop.width * size.width, height: crop.height * size.height)
+                    .position(x: crop.midX * size.width, y: crop.midY * size.height)
+                    .contentShape(Rectangle())
+                    .gesture(moveGesture(size))
             }
-            .contentShape(Rectangle())
         }
+    }
+
+    private func rectIn(_ size: CGSize) -> CGRect {
+        CGRect(x: crop.minX * size.width, y: crop.minY * size.height,
+               width: crop.width * size.width, height: crop.height * size.height)
     }
 
     private func dimMask(_ size: CGSize) -> some View {
@@ -36,41 +44,23 @@ struct CropCanvas: View {
             .allowsHitTesting(false)
     }
 
-    private func cropFrame(_ size: CGSize) -> some View {
-        let rect = CGRect(x: crop.minX * size.width, y: crop.minY * size.height,
-                          width: crop.width * size.width, height: crop.height * size.height)
-        return ZStack {
-            Path { p in
-                p.addRect(rect)
-                for i in 1...2 {
-                    let x = rect.minX + rect.width * CGFloat(i) / 3
-                    p.move(to: CGPoint(x: x, y: rect.minY)); p.addLine(to: CGPoint(x: x, y: rect.maxY))
-                    let y = rect.minY + rect.height * CGFloat(i) / 3
-                    p.move(to: CGPoint(x: rect.minX, y: y)); p.addLine(to: CGPoint(x: rect.maxX, y: y))
-                }
-            }
-            .stroke(.white.opacity(0.85), lineWidth: 1)
-
-            ForEach(Handle.corners, id: \.self) { handle in
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(Theme.accent)
-                    .frame(width: 22, height: 22)
-                    .position(handle.point(in: rect))
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { v in activeHandle = handle; resize(handle, to: v.location, size: size) }
-                            .onEnded { _ in activeHandle = nil; Haptics.selection() }
-                    )
+    private func grid(_ rect: CGRect) -> some View {
+        Path { p in
+            p.addRect(rect)
+            for i in 1...2 {
+                let x = rect.minX + rect.width * CGFloat(i) / 3
+                p.move(to: CGPoint(x: x, y: rect.minY)); p.addLine(to: CGPoint(x: x, y: rect.maxY))
+                let y = rect.minY + rect.height * CGFloat(i) / 3
+                p.move(to: CGPoint(x: rect.minX, y: y)); p.addLine(to: CGPoint(x: rect.maxX, y: y))
             }
         }
-        .contentShape(Rectangle())
-        .gesture(moveGesture(size))
+        .stroke(.white.opacity(0.85), lineWidth: 1)
+        .allowsHitTesting(false)
     }
 
     private func moveGesture(_ size: CGSize) -> some Gesture {
         DragGesture(minimumDistance: 4)
             .onChanged { v in
-                guard activeHandle == nil else { return }
                 if dragStartOrigin == nil { dragStartOrigin = crop.origin }
                 let start = dragStartOrigin ?? crop.origin
                 var o = CGPoint(x: start.x + v.translation.width / size.width,
@@ -81,10 +71,65 @@ struct CropCanvas: View {
             }
             .onEnded { _ in dragStartOrigin = nil }
     }
+}
+
+/// The four corner resize grips — Apple-style white circles, drawn unclipped over the card so they
+/// stay fully visible even when the crop fills the frame.
+struct CropHandles: View {
+    let model: EditorModel
+    @State private var active: Handle?
+    private let minSize: CGFloat = 0.12
+
+    private var crop: CGRect { model.cropWorkingRect }
+
+    var body: some View {
+        GeometryReader { geo in
+            let size = geo.size
+            let rect = CGRect(x: crop.minX * size.width, y: crop.minY * size.height,
+                              width: crop.width * size.width, height: crop.height * size.height)
+            ForEach(Handle.corners, id: \.self) { handle in
+                Color.clear
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+                    .overlay(
+                        Circle()
+                            .fill(.white)
+                            .frame(width: 22, height: 22)
+                            .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
+                            .overlay(Circle().strokeBorder(.black.opacity(0.05), lineWidth: 0.5))
+                    )
+                    .position(handle.point(in: rect))
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { v in active = handle; resize(handle, to: v.location, size: size) }
+                            .onEnded { _ in active = nil; Haptics.selection() }
+                    )
+            }
+        }
+    }
 
     private func resize(_ handle: Handle, to location: CGPoint, size: CGSize) {
         let nx = min(max(0, location.x / size.width), 1)
         let ny = min(max(0, location.y / size.height), 1)
+
+        if let ratio = model.cropAspectRatio {
+            // Locked: anchor the opposite corner, keep displayed aspect == ratio.
+            let k = model.cropPreviewAspect / ratio   // h_n = w_n * k
+            let ax = handle.isLeft ? crop.maxX : crop.minX
+            let ay = handle.isTop ? crop.maxY : crop.minY
+            var w = max(abs(nx - ax), abs(ny - ay) / k)
+            var h = w * k
+            let maxW = handle.isLeft ? ax : 1 - ax
+            let maxH = handle.isTop ? ay : 1 - ay
+            if w > maxW { w = maxW; h = w * k }
+            if h > maxH { h = maxH; w = h / k }
+            w = max(w, minSize); h = max(h, minSize)
+            let cx = handle.isLeft ? ax - w : ax + w
+            let cy = handle.isTop ? ay - h : ay + h
+            model.cropWorkingRect = CGRect(x: min(ax, cx), y: min(ay, cy), width: w, height: h)
+            return
+        }
+
         var r = crop
         if handle.isLeft { r.size.width = max(minSize, crop.maxX - nx); r.origin.x = min(nx, crop.maxX - minSize) }
         if handle.isRight { r.size.width = max(minSize, nx - crop.minX) }

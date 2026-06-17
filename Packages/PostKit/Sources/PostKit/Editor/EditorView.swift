@@ -140,8 +140,9 @@ public struct EditorView: View {
                     .allowsHitTesting(false)
             }
         }
-        .overlay(alignment: .topLeading) { infoMorph }
-        // Aspect-ratio menu — top-right, mirroring the (i).
+        // (i) hidden while cropping so it doesn't crowd the corner handle.
+        .overlay(alignment: .topLeading) { if !model.isCropping { infoMorph } }
+        // Aspect-ratio menu — top-right, taking the (i)'s place while cropping.
         .overlay(alignment: .topTrailing) { if model.isCropping { aspectMenu } }
         .overlay(alignment: .top) {
             if isComparing && !showInfo {
@@ -156,6 +157,8 @@ public struct EditorView: View {
             RoundedRectangle(cornerRadius: Theme.Radius.image, style: .continuous)
                 .strokeBorder(.white.opacity(0.08), lineWidth: 1)
         )
+        // Resize grips drawn OUTSIDE the clip so they're never cut off by the rounded corners.
+        .overlay { if model.isCropping { CropHandles(model: model) } }
     }
 
     /// Aspect-ratio picker shown top-right while cropping (mirrors the (i) top-left).

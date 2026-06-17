@@ -93,6 +93,8 @@ public final class EditorModel: Identifiable {
     public private(set) var cropQuarterTurns: Int = 0
     public private(set) var cropFlipH = false
     public private(set) var cropFlipV = false
+    /// Locked crop aspect (final width÷height in pixels); nil = Free (handles resize freely).
+    public private(set) var cropAspectRatio: Double?
     /// Cached uncropped preview the crop canvas shows (recomputed only when geometry changes).
     public private(set) var cropDisplayImage: CIImage = CIImage.empty()
 
@@ -111,6 +113,7 @@ public final class EditorModel: Identifiable {
         cropQuarterTurns = state.rotationQuarterTurns
         cropFlipH = state.flippedHorizontally
         cropFlipV = state.flippedVertically
+        cropAspectRatio = nil
         recomputeCropDisplay()
         isCropping = true
     }
@@ -138,7 +141,9 @@ public final class EditorModel: Identifiable {
     public func cancelCrop() { isCropping = false }
 
     /// Set the crop to a centered rectangle of the given width-over-height ratio (nil = Free/full).
+    /// The ratio is remembered so the handles stay locked to it while resizing.
     public func setCropAspect(_ ratio: Double?) {
+        cropAspectRatio = ratio
         guard let ratio else {
             cropWorkingRect = CGRect(x: 0, y: 0, width: 1, height: 1)
             return
