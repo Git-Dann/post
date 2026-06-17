@@ -874,9 +874,11 @@ public struct EditorView: View {
         let noSubject = model.maskUnavailable && regional && !model.isPreparingMask
         let tint: Color = noSubject ? .orange : (regional ? Theme.accent : .white)
         return Menu {
-            Picker("Adjust", selection: scopeBinding) {
-                ForEach(SelectiveScope.allCases, id: \.self) { s in
-                    Label(s.title, systemImage: s.systemImage).tag(s)
+            // Explicit buttons (not a Picker) so only the active scope is marked — a checkmark on the
+            // current one, each other showing its own icon — rather than the whole list reading active.
+            ForEach(SelectiveScope.allCases, id: \.self) { s in
+                Button { selectScope(s) } label: {
+                    Label(s.title, systemImage: model.scope == s ? "checkmark" : s.systemImage)
                 }
             }
         } label: {
@@ -920,16 +922,12 @@ public struct EditorView: View {
         }
     }
 
-    private var scopeBinding: Binding<SelectiveScope> {
-        Binding(
-            get: { model.scope },
-            set: {
-                model.setScope($0)
-                Haptics.selection()
-                announce($0.announcement)
-                revealScope()
-            }
-        )
+    private func selectScope(_ scope: SelectiveScope) {
+        guard model.scope != scope else { return }
+        model.setScope(scope)
+        Haptics.selection()
+        announce(scope.announcement)
+        revealScope()
     }
 
     /// Flash the selection: dim the un-edited region for a beat, then fade. No-op for whole-photo or

@@ -172,9 +172,9 @@ public struct HapticDial: View {
             .frame(width: 3, height: height * 0.7)
             .scaleEffect(x: 1, y: indicatorScale, anchor: .center)
             .shadow(color: Theme.accent.opacity(0.6), radius: 6)
-            // Double-tap the fixed centre mark to snap the dial back to zero. A modest hit area makes
-            // it tappable; single touches/drags still fall through to the ruler underneath.
-            .frame(width: 40, height: height)
+            // Double-tap the fixed centre mark to snap the dial back to zero. A slim hit area so it
+            // stays tappable without swallowing the scrub drag around the centre.
+            .frame(width: 20, height: height)
             .contentShape(Rectangle())
             .onTapGesture(count: 2) { zeroOut() }
             .accessibilityHidden(true)
