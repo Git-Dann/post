@@ -1,4 +1,5 @@
 import CoreImage
+import CoreImage.CIFilterBuiltins
 import ImageIO
 import UniformTypeIdentifiers
 import Metal
@@ -14,12 +15,13 @@ public actor ImageExporter {
         case heic
         case jpeg
 
-        var utType: UTType { self == .heic ? .heic : .jpeg }
+        public var utType: UTType { self == .heic ? .heic : .jpeg }
         // HEIC renders at 16-bit (10-bit-capable container) — a deliberate quality choice: fades and
         // grain band visibly at 8-bit. The wider intermediate costs transient memory on very large
         // photos, but it's a single image rendered off-main and released right after encode. JPEG is
         // 8-bit (its own ceiling), so there's nothing to gain there.
         var ciFormat: CIFormat { self == .heic ? .RGBA16 : .RGBA8 }
+        public var fileExtension: String { self == .heic ? "heic" : "jpg" }
     }
 
     public enum ExportError: Error { case decodeFailed, renderFailed, encodeFailed }
@@ -41,20 +43,33 @@ public actor ImageExporter {
         }
     }
 
-    /// Render `imageData` through `state` at full resolution and encode to `format`.
+    /// Render `imageData` through `state` and encode to `format`. `maxDimension` (longest edge in px,
+    /// nil = full resolution) lets share/export presets cap the output size.
     public func export(
         imageData: Data,
         state: EditState,
         format: Format = .heic,
         quality: Double = 0.92,
-        stripLocation: Bool = false
+        stripLocation: Bool = false,
+        maxDimension: CGFloat? = nil
     ) throws -> Data {
         guard let source = ImageLoader.fullImage(from: imageData) else {
             throw ExportError.decodeFailed
         }
 
         // Full resolution → native grain (grainScale 1).
-        let output = FilterPipeline.makeImage(source: source, state: state, grainScale: 1)
+        var output = FilterPipeline.makeImage(source: source, state: state, grainScale: 1)
+        // Optional resize for export presets (web/medium). High-quality Lanczos.
+        if let maxDimension {
+            let longest = max(output.extent.width, output.extent.height)
+            if longest > maxDimension {
+                let f = CIFilter.lanczosScaleTransform()
+                f.inputImage = output
+                f.scale = Float(maxDimension / longest)
+                f.aspectRatio = 1
+                output = f.outputImage ?? output
+            }
+        }
         guard let cgImage = ciContext.createCGImage(
             output,
             from: output.extent,

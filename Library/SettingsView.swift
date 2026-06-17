@@ -7,6 +7,9 @@ import PostKit
 /// photo-access controls.
 struct SettingsView: View {
     @AppStorage(ExportPrefs.removeLocationKey, store: .postShared) private var removeLocation = true
+    @AppStorage(ExportPrefs.formatKey, store: .postShared) private var exportFormat = "heic"
+    @AppStorage(ExportPrefs.qualityKey, store: .postShared) private var exportQuality = 0.92
+    @AppStorage(ExportPrefs.maxDimensionKey, store: .postShared) private var exportMaxDimension = 0.0
     @AppStorage("soundEffectsEnabled") private var soundEnabled = false
     @AppStorage(AccentChoice.storageKey) private var accentRaw = AccentChoice.amber.rawValue
     @State private var photoStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
@@ -26,6 +29,7 @@ struct SettingsView: View {
                         promise
                         appearance
                         photoAccess
+                        exportFormatSection
                         exportOptions
                         Text(version)
                             .font(.footnote)
@@ -160,6 +164,58 @@ struct SettingsView: View {
         } else if let url = URL(string: UIApplication.openSettingsURLString) {
             UIApplication.shared.open(url)
         }
+    }
+
+    private var exportFormatSection: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            VStack(alignment: .leading, spacing: Theme.Space.s) {
+                Text("Format")
+                    .font(.subheadline.weight(.medium))
+                Picker("Format", selection: $exportFormat) {
+                    Text("HEIC").tag("heic")
+                    Text("JPEG").tag("jpeg")
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                Text("HEIC is smaller and 10-bit; JPEG is the most compatible.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Divider().overlay(.white.opacity(0.1))
+
+            VStack(alignment: .leading, spacing: Theme.Space.s) {
+                HStack {
+                    Text("Quality").font(.subheadline.weight(.medium))
+                    Spacer()
+                    Text("\(Int((exportQuality * 100).rounded()))%")
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                Slider(value: $exportQuality, in: 0.6...1.0)
+                    .tint(Theme.accent)
+            }
+
+            Divider().overlay(.white.opacity(0.1))
+
+            VStack(alignment: .leading, spacing: Theme.Space.s) {
+                Text("Resolution")
+                    .font(.subheadline.weight(.medium))
+                Picker("Resolution", selection: $exportMaxDimension) {
+                    Text("Full").tag(0.0)
+                    Text("Large").tag(4096.0)
+                    Text("Medium").tag(2048.0)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                Text("Caps the longest edge when you share or export (edits in Photos stay full size).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Theme.Space.l)
+        .glassEffect(in: .rect(cornerRadius: Theme.Radius.card))
     }
 
     private var exportOptions: some View {

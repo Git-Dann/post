@@ -49,10 +49,13 @@ struct ApplyStyleIntent: AppIntent {
         let recipe = manifest.styles.first { $0.id == style.rawValue }?.recipe ?? EditState()
 
         let exporter = ImageExporter()
+        let format = ExportPrefs.format
         let output = try await exporter.export(
-            imageData: data, state: recipe, format: .heic, stripLocation: ExportPrefs.removeLocation)
+            imageData: data, state: recipe, format: format, quality: ExportPrefs.quality,
+            stripLocation: ExportPrefs.removeLocation, maxDimension: ExportPrefs.maxDimension)
 
-        let result = IntentFile(data: output, filename: "Post-\(style.rawValue).heic", type: .heic)
+        let result = IntentFile(data: output, filename: "Post-\(style.rawValue).\(format.fileExtension)",
+                                type: format.utType)
         return .result(value: result)
     }
 }

@@ -268,11 +268,13 @@ struct GalleryView: View {
         { state in
             guard let data = model.originalData else { return nil }
             let exporter = ImageExporter()
+            let format = ExportPrefs.format
             guard let output = try? await exporter.export(
-                imageData: data, state: state, format: .heic, stripLocation: removeLocation
+                imageData: data, state: state, format: format, quality: ExportPrefs.quality,
+                stripLocation: ExportPrefs.removeLocation, maxDimension: ExportPrefs.maxDimension
             ) else { return nil }
             let url = FileManager.default.temporaryDirectory
-                .appendingPathComponent("Post-\(UUID().uuidString).heic")
+                .appendingPathComponent("Post-\(UUID().uuidString).\(format.fileExtension)")
             do { try output.write(to: url); return url } catch { return nil }
         }
     }

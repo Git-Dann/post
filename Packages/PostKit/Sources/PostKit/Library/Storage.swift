@@ -4,7 +4,7 @@ import Foundation
 /// (with a safe fallback to Application Support if the group isn't available). Written with file
 /// protection so originals are encrypted at rest.
 public enum Storage {
-    public static let appGroupID = "group.co.gitwork.post"
+    public nonisolated static let appGroupID = "group.co.gitwork.post"
 
     /// App Group container if available; otherwise the app's Application Support directory.
     public static var baseDirectory: URL {
@@ -62,15 +62,38 @@ public enum Storage {
 
 public extension UserDefaults {
     /// Settings shared between the app and its extensions via the App Group (falls back to standard).
-    static let postShared = UserDefaults(suiteName: Storage.appGroupID) ?? .standard
+    /// `nonisolated(unsafe)`: UserDefaults is documented thread-safe, so concurrent reads are fine.
+    nonisolated(unsafe) static let postShared = UserDefaults(suiteName: Storage.appGroupID) ?? .standard
 }
 
-/// Export preferences shared across the app, extensions and the Shortcuts intent.
-public enum ExportPrefs {
+/// Export preferences shared across the app, extensions and the Shortcuts intent. `nonisolated`
+/// (pure UserDefaults reads) so the App Intent and extensions can read them off the main actor.
+public nonisolated enum ExportPrefs {
     public static let removeLocationKey = "removeLocationOnExport"
+    public static let formatKey = "exportFormat"          // "heic" | "jpeg"
+    public static let qualityKey = "exportQuality"        // 0…1
+    public static let maxDimensionKey = "exportMaxDimension"  // longest edge in px; 0 = full
 
     /// Strip location metadata on export. Defaults to ON (privacy-first) when unset.
     public static var removeLocation: Bool {
         UserDefaults.postShared.object(forKey: removeLocationKey) as? Bool ?? true
+    }
+
+    /// Output container. Defaults to HEIC (smaller, 10-bit).
+    public static var format: ImageExporter.Format {
+        UserDefaults.postShared.string(forKey: formatKey) == "jpeg" ? .jpeg : .heic
+    }
+
+    /// Lossy compression quality. Defaults to 0.92.
+    public static var quality: Double {
+        let q = UserDefaults.postShared.object(forKey: qualityKey) as? Double ?? 0.92
+        return min(max(q, 0.4), 1.0)
+    }
+
+    /// Longest-edge cap for share/export (nil = full resolution). Not applied to edit-in-place
+    /// (the Photos extension) so library photos keep their native size.
+    public static var maxDimension: CGFloat? {
+        let d = UserDefaults.postShared.object(forKey: maxDimensionKey) as? Double ?? 0
+        return d > 0 ? CGFloat(d) : nil
     }
 }
