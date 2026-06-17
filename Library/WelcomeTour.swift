@@ -35,6 +35,13 @@ struct WelcomeTour: View {
     var body: some View {
         ZStack {
             Theme.canvas.ignoresSafeArea()
+            // A warm accent glow up top — gives the sheet some life and depth.
+            RadialGradient(colors: [Theme.accent.opacity(0.30), .clear],
+                           center: .topLeading, startRadius: 0, endRadius: 420)
+                .ignoresSafeArea()
+                .opacity(appeared ? 1 : 0)
+                .animation(reduceMotion ? nil : .smooth(duration: 0.9), value: appeared)
+                .allowsHitTesting(false)
             VStack(spacing: 0) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 34) {
@@ -80,12 +87,15 @@ struct WelcomeTour: View {
 
     @ViewBuilder
     private func featureRow(_ f: Feature, index: Int) -> some View {
-        let delay = reduceMotion ? 0 : 0.12 + Double(index) * 0.09
-        HStack(alignment: .top, spacing: Theme.Space.l) {
+        let delay = reduceMotion ? 0 : 0.14 + Double(index) * 0.1
+        HStack(alignment: .center, spacing: Theme.Space.l) {
+            // Icon in a soft accent tile (the Apple "What's New" row look).
             Image(systemName: f.symbol)
-                .font(.system(size: 28, weight: .semibold))
+                .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(Theme.accent)
-                .frame(width: 42, height: 42)
+                .frame(width: 48, height: 48)
+                .background(Theme.accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous).strokeBorder(Theme.accent.opacity(0.25), lineWidth: 1))
                 .symbolEffect(.bounce, options: .nonRepeating, value: appeared)
             VStack(alignment: .leading, spacing: 3) {
                 Text(f.title)
@@ -99,8 +109,9 @@ struct WelcomeTour: View {
             Spacer(minLength: 0)
         }
         .opacity(appeared ? 1 : 0)
-        .offset(y: appeared ? 0 : 16)
-        .animation(reduceMotion ? nil : .smooth(duration: 0.5).delay(delay), value: appeared)
+        .offset(y: appeared ? 0 : 22)
+        // Springier entrance for a bit more bounce/life than a plain fade.
+        .animation(reduceMotion ? nil : .spring(response: 0.55, dampingFraction: 0.7).delay(delay), value: appeared)
     }
 
     private var footer: some View {

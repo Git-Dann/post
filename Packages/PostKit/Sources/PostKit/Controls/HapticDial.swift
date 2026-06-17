@@ -105,12 +105,12 @@ public struct HapticDial: View {
                     if old != .idle && new == .idle { onCommit() }
                 }
                 .onAppear {
-                    // scrollPosition doesn't reliably apply its INITIAL value when it's at an extreme
-                    // (e.g. a style applied at 100% = the last tick), because centring the end tick
-                    // needs the trailing content margin that only exists once the width is known.
-                    // Force it after this layout pass — instant, no haptic (centered doesn't change).
-                    guard let centered else { return }
-                    DispatchQueue.main.async { proxy.scrollTo(centered, anchor: .center) }
+                    // scrollPosition doesn't reliably apply its INITIAL value at an extreme, so force
+                    // it once the layout exists. (SwiftUI still physically undershoots the literal
+                    // first/last tick by ~2 ticks when seeded programmatically — a framework quirk;
+                    // interior values are exact and manual scrubbing snaps fine.)
+                    guard let target = centered else { return }
+                    DispatchQueue.main.async { proxy.scrollTo(target, anchor: .center) }
                 }
             }
         }
