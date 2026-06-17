@@ -302,8 +302,9 @@ public struct EditorView: View {
                     .onTapGesture { withAnimation(reduceMotion ? nil : .default) { showInfo = false } }
             }
         }
-        // (i) hidden while cropping so it doesn't crowd the corner handle.
-        .overlay(alignment: .topLeading) { if !model.isCropping { infoMorph } }
+        // (i) metadata panel parked for now — the gallery's long-press "Info" covers this. The
+        // infoMorph/metadata code stays below, ready to re-enable.
+        // .overlay(alignment: .topLeading) { if !model.isCropping { infoMorph } }
         // Aspect-ratio menu — top-right while cropping; the scope chip takes the same corner while a
         // tonal tool is active (the two modes never overlap).
         .overlay(alignment: .topTrailing) { if model.isCropping { aspectMenu } }
@@ -859,10 +860,10 @@ public struct EditorView: View {
         .padding(.horizontal, Theme.Space.l)
     }
 
-    /// Whether the selective-scope chip is shown — only while a tonal tool is active (finishing tools
-    /// and crop don't scope), and never over the styles strip.
+    /// Whether the selective-scope chip is shown — present for every adjustment tool (the scope
+    /// confines the whole edit), but not over the styles strip or while cropping.
     private var showsScopeChip: Bool {
-        showsChrome && !model.isCropping && !showStyles && (model.selectedTool?.isScopeable ?? false)
+        showsChrome && !model.isCropping && !showStyles && model.selectedTool != nil
     }
 
     /// The selective-scope chip, top-right (mirroring the crop aspect menu). Tap for a native menu of

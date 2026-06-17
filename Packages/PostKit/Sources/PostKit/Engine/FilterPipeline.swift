@@ -22,24 +22,25 @@ public enum FilterPipeline {
         mask: CIImage? = nil
     ) -> CIImage {
         let geo = applyGeometry(source, state)        // geometry first → less work downstream
-        var toned = applyExposure(geo, state)         // overall light, like a stop adjustment
-        toned = applyWhiteBalance(toned, state)       // warmth + tint (temperature)
-        toned = applyHighlightShadow(toned, state)    // recover/lift tonal extremes
-        toned = applyColor(toned, state)              // contrast/brightness/saturation in one pass
-        toned = applyVibrance(toned, state)           // smart saturation after the flat saturation
-        toned = applyHue(toned, state)                // hue rotate
-        toned = applyFade(toned, state)               // lifted blacks AFTER color so the lift survives
-
-        // Selective scope: confine the tonal/colour edit to a region, compositing it over the
-        // untoned base through the geometry-aligned subject mask. Finishing below stays global.
-        if state.scope.isRegional, let mask {
-            let geoMask = applyGeometry(mask, state)  // same transforms → aligns with `geo`
-            toned = composite(toned: toned, base: geo, mask: geoMask, scope: state.scope)
-        }
-
-        var img = applySharpen(toned, state, grainScale: grainScale)  // crispness on near-final tones
+        var img = applyExposure(geo, state)           // overall light, like a stop adjustment
+        img = applyWhiteBalance(img, state)           // warmth + tint (temperature)
+        img = applyHighlightShadow(img, state)        // recover/lift tonal extremes
+        img = applyColor(img, state)                  // contrast/brightness/saturation in one pass
+        img = applyVibrance(img, state)               // smart saturation after the flat saturation
+        img = applyHue(img, state)                    // hue rotate
+        img = applyFade(img, state)                   // lifted blacks AFTER color so the lift survives
+        img = applySharpen(img, state, grainScale: grainScale)  // crispness on near-final tones
         img = applyVignette(img, state)               // darken the edges of the finished frame
         img = applyGrain(img, amount: state.grain, grainScale: grainScale) // grain last: overlay on final
+
+        // Selective scope: confine the WHOLE edit to a region — composite the fully-edited image over
+        // the untouched (geometry-only) original through the geometry-aligned subject mask. So every
+        // tool respects the scope: the chosen region is edited, everything else stays original.
+        // Whole-photo (or no mask yet) skips this and renders the edit across the frame.
+        if state.scope.isRegional, let mask {
+            let geoMask = applyGeometry(mask, state)  // same transforms → aligns with `geo`
+            img = composite(toned: img, base: geo, mask: geoMask, scope: state.scope)
+        }
         return img
     }
 
