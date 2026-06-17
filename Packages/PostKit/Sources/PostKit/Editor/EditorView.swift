@@ -85,6 +85,10 @@ public struct EditorView: View {
                 model.selectedTool = .grain
                 model.update(.grain, to: 0.9)
             }
+            if args.contains("--demo-straighten") {
+                model.apply(crop: model.state.crop, straighten: 0.2,
+                            quarterTurns: 0, flipH: false, flipV: false)
+            }
             if args.contains("--open-crop") { model.isCropping = true }
             if args.contains("--live-test") {
                 Task {

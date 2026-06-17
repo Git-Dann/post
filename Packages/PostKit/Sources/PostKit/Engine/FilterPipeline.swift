@@ -31,16 +31,32 @@ public enum FilterPipeline {
         guard !e0.isInfinite, !e0.isNull, !e0.isEmpty else { return image }
 
         var img = image
-        let needsTransform = s.straightenAngle != 0 || s.rotationQuarterTurns != 0
-            || s.flippedHorizontally || s.flippedVertically
-        if needsTransform {
-            let center = CGPoint(x: e0.midX, y: e0.midY)
+
+        // 90° turns + flips — no empty space introduced.
+        if s.rotationQuarterTurns != 0 || s.flippedHorizontally || s.flippedVertically {
+            let c = CGPoint(x: img.extent.midX, y: img.extent.midY)
             let t = CGAffineTransform.identity
-                .translatedBy(x: center.x, y: center.y)
-                .rotated(by: -s.straightenAngle + Double(s.rotationQuarterTurns) * .pi / 2)
+                .translatedBy(x: c.x, y: c.y)
+                .rotated(by: Double(s.rotationQuarterTurns) * .pi / 2)
                 .scaledBy(x: s.flippedHorizontally ? -1 : 1, y: s.flippedVertically ? -1 : 1)
-                .translatedBy(x: -center.x, y: -center.y)
+                .translatedBy(x: -c.x, y: -c.y)
             img = img.transformed(by: t)
+        }
+
+        // Straighten: rotate AND zoom-to-fill so the frame stays full of image (no empty corners),
+        // then crop back to the frame — matches Photos' straighten behaviour.
+        if s.straightenAngle != 0 {
+            let frame = img.extent
+            let c = CGPoint(x: frame.midX, y: frame.midY)
+            let a = s.straightenAngle
+            // Smallest scale that keeps the rotated frame covering the original frame.
+            let zoom = (abs(cos(a)) + abs(sin(a)) * max(frame.width / frame.height, frame.height / frame.width)) * 1.003
+            let t = CGAffineTransform.identity
+                .translatedBy(x: c.x, y: c.y)
+                .rotated(by: -a)
+                .scaledBy(x: zoom, y: zoom)
+                .translatedBy(x: -c.x, y: -c.y)
+            img = img.transformed(by: t).cropped(to: frame)
         }
 
         if !s.crop.isFull {
