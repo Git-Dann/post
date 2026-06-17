@@ -23,9 +23,22 @@ public enum ImageLoader {
         }
     }
 
-    /// Full-resolution, orientation-applied `CIImage` from encoded data (HEIC/JPEG/PNG…).
+    /// Full-resolution, orientation-applied `CIImage` from encoded data (HEIC/JPEG/PNG/RAW…).
+    /// RAW & ProRAW (DNG) are demosaiced through `CIRAWFilter`, which gives the wide latitude the
+    /// exposure/highlight/shadow tools rely on; everything else decodes the standard way.
     public static nonisolated func fullImage(from data: Data) -> CIImage? {
-        CIImage(data: data, options: [.applyOrientationProperty: true])
+        if let raw = CIRAWFilter(imageData: data, identifierHint: nil), let output = raw.outputImage {
+            return output   // CIRAWFilter applies the embedded orientation itself
+        }
+        return CIImage(data: data, options: [.applyOrientationProperty: true])
+    }
+
+    /// True if the data is a camera RAW / ProRAW file (surfaced as a "RAW" tag in the info panel).
+    public static nonisolated func isRAW(_ data: Data) -> Bool {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let typeID = CGImageSourceGetType(source) as String?,
+              let utType = UTType(typeID) else { return false }
+        return utType.conforms(to: .rawImage)
     }
 
     /// Build a downscaled preview whose longest edge is ~`maxEdge` points × scale, for fast,
@@ -82,7 +95,9 @@ public enum ImageLoader {
         var rows: [MetaRow] = []
 
         if let typeID = CGImageSourceGetType(source) as String?, let utType = UTType(typeID) {
-            rows.append(MetaRow(label: "Format", value: utType.localizedDescription ?? typeID))
+            let name = utType.localizedDescription ?? typeID
+            let value = utType.conforms(to: .rawImage) ? "\(name) · RAW" : name
+            rows.append(MetaRow(label: "Format", value: value))
         }
         if let w = props[kCGImagePropertyPixelWidth as String] as? Int,
            let h = props[kCGImagePropertyPixelHeight as String] as? Int {
