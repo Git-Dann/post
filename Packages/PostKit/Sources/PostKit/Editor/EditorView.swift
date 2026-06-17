@@ -34,6 +34,11 @@ public struct EditorView: View {
     @AppStorage("soundEffectsEnabled") private var soundEnabled = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.verticalSizeClass) private var vSize
+
+    /// Side-rail layout when the viewport is short & wide (iPhone landscape). iPad and portrait stay
+    /// on the stacked layout (.regular height); extensions (no chrome) stay stacked too.
+    private var isLandscape: Bool { showsChrome && vSize == .compact }
 
     /// - Parameters:
     ///   - exporter: produces a shareable file URL for the given recipe (full-res export),
@@ -59,30 +64,15 @@ public struct EditorView: View {
     public var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-
-            VStack(spacing: Theme.Space.s) {
-                if showsChrome { topBar }
-
-                framedImage
-                    .aspectRatio(model.isCropping ? model.cropPreviewAspect : model.aspect,
-                                 contentMode: .fit)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(.horizontal, Theme.Space.s)
-
-                if showsChrome {
-                    if model.isCropping {
-                        cropToolStrip
-                        cropActionBar
-                            .padding(.bottom, Theme.Space.s)
-                    } else {
-                        toolStrip
-                        actionBar
-                            .padding(.bottom, Theme.Space.s)
-                    }
-                }
+            // One control set, two arrangements. Only the black canvas bleeds under the safe area;
+            // the content respects insets so the rails clear the landscape notch / home indicator.
+            Group {
+                if isLandscape { landscapeLayout } else { portraitLayout }
             }
         }
         .statusBarHidden()
+        // Smooth, native relayout when the device rotates (snaps under Reduce Motion).
+        .animation(reduceMotion ? nil : Theme.Motion.settle, value: isLandscape)
         // The editor dismisses only via its Done/Gallery buttons. Disabling interactive dismissal
         // stops the zoom-transition's pull/pinch-to-dismiss from hijacking the pinch-to-inspect
         // gesture (which was skewing the whole presentation away).
@@ -130,6 +120,69 @@ public struct EditorView: View {
             }
             #endif
         }
+    }
+
+    // MARK: Layouts (portrait stacked / landscape side-rail)
+
+    /// Today's portrait layout: actions on top, image, tools + Done below; the dial overlays the
+    /// image bottom (see `framedImage`).
+    private var portraitLayout: some View {
+        VStack(spacing: Theme.Space.s) {
+            if showsChrome { topBar }
+
+            framedImage
+                .aspectRatio(model.isCropping ? model.cropPreviewAspect : model.aspect,
+                             contentMode: .fit)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.horizontal, Theme.Space.s)
+
+            if showsChrome {
+                if model.isCropping {
+                    cropToolStrip
+                    cropActionBar
+                        .padding(.bottom, Theme.Space.s)
+                } else {
+                    toolStrip(axis: .horizontal)
+                    actionBar
+                        .padding(.bottom, Theme.Space.s)
+                }
+            }
+        }
+    }
+
+    /// Landscape: actions rail (left) | image | dial + Done in the centre gap | tools rail (right).
+    private var landscapeLayout: some View {
+        HStack(spacing: Theme.Space.m) {
+            actionRail
+                .frame(width: 56)
+
+            framedImage
+                .aspectRatio(model.isCropping ? model.cropPreviewAspect : model.aspect,
+                             contentMode: .fit)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            // The "blank space" centre column — reserved a usable min width so a wide photo can't
+            // squeeze the dial; a tall photo just leaves a wider gap (column grows toward maxWidth).
+            VStack(spacing: Theme.Space.s) {
+                Spacer(minLength: 0)
+                dialSlot(scrim: false)
+                if model.isCropping { cropActionBar } else { actionBar }
+                Spacer(minLength: 0)
+            }
+            .frame(minWidth: 240, maxWidth: 320)
+
+            // Tool rail (or the rotate/flip rail while cropping).
+            Group {
+                if model.isCropping {
+                    VStack(spacing: Theme.Space.l) { cropButtons }
+                } else {
+                    toolStrip(axis: .vertical)
+                }
+            }
+            .frame(width: 84)
+        }
+        .padding(.horizontal, Theme.Space.s)
+        .padding(.vertical, Theme.Space.s)
     }
 
     // MARK: Framed image (with the controls living inside it)
@@ -220,7 +273,9 @@ public struct EditorView: View {
                     .allowsHitTesting(false)   // tap passes through to the catcher to toggle back
             }
         }
-        .overlay(alignment: .bottom) { imageControls }
+        // Portrait: the dial overlays the image bottom (with a scrim). Landscape: it lives in the
+        // centre column instead, so suppress the overlay here.
+        .overlay(alignment: .bottom) { if !isLandscape { dialSlot(scrim: true) } }
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.image, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: Theme.Radius.image, style: .continuous)
@@ -408,9 +463,10 @@ public struct EditorView: View {
         model.isCropping || showStyles || model.selectedTool != nil
     }
 
-    /// The dial (or styles strip) that lives inside the bottom of the image, over a scrim.
+    /// The dial (or styles strip). Portrait mounts it as a bottom overlay on the image with a scrim;
+    /// landscape mounts it bare in the centre column (`scrim: false`). Same content either way.
     @ViewBuilder
-    private var imageControls: some View {
+    private func dialSlot(scrim: Bool) -> some View {
       if hasBottomControls {
         VStack(spacing: Theme.Space.s) {
             if model.isCropping {
@@ -467,10 +523,12 @@ public struct EditorView: View {
         .padding(.top, Theme.Space.xl)
         .padding(.bottom, Theme.Space.m)
         .frame(maxWidth: .infinity)
-        .background(
-            LinearGradient(colors: [.clear, .black.opacity(0.65)], startPoint: .top, endPoint: .bottom)
-                .allowsHitTesting(false)
-        )
+        .background {
+            if scrim {
+                LinearGradient(colors: [.clear, .black.opacity(0.65)], startPoint: .top, endPoint: .bottom)
+                    .allowsHitTesting(false)
+            }
+        }
       }
     }
 
@@ -543,32 +601,56 @@ public struct EditorView: View {
         Binding(get: { model.cropStraighten }, set: { model.setCropStraighten($0) })
     }
 
-    // MARK: Top bar (on the canvas, above the image)
+    // MARK: Action buttons (top bar in portrait, left rail in landscape — same buttons)
 
+    private var galleryButton: some View {
+        GlassIconButton("square.grid.2x2", label: "Gallery") { onCancel() }
+    }
+    private var undoButton: some View {
+        GlassIconButton("arrow.uturn.backward", label: "Undo") { model.undo() }
+            .disabled(!model.canUndo)
+            .opacity(model.canUndo ? 1 : 0.35)
+    }
+    private var redoButton: some View {
+        GlassIconButton("arrow.uturn.forward", label: "Redo") { model.redo() }
+            .disabled(!model.canRedo)
+            .opacity(model.canRedo ? 1 : 0.35)
+    }
+    private var shareButton: some View {
+        GlassIconButton(isExporting ? "ellipsis" : "square.and.arrow.up", label: "Share") { share() }
+            .disabled(isExporting || exporter == nil)
+            .opacity(exporter == nil ? 0.35 : (isExporting ? 0.5 : 1))   // dim while working
+    }
+
+    /// Portrait: Gallery | Undo Redo | Share across the top.
     private var topBar: some View {
         HStack {
-            GlassIconButton("square.grid.2x2", label: "Gallery") { onCancel() }
+            galleryButton
             Spacer()
-            HStack(spacing: Theme.Space.s) {
-                GlassIconButton("arrow.uturn.backward", label: "Undo") { model.undo() }
-                    .disabled(!model.canUndo)
-                    .opacity(model.canUndo ? 1 : 0.35)
-                GlassIconButton("arrow.uturn.forward", label: "Redo") { model.redo() }
-                    .disabled(!model.canRedo)
-                    .opacity(model.canRedo ? 1 : 0.35)
-            }
+            HStack(spacing: Theme.Space.s) { undoButton; redoButton }
             Spacer()
-            GlassIconButton(isExporting ? "ellipsis" : "square.and.arrow.up", label: "Share") { share() }
-                .disabled(isExporting || exporter == nil)
-                .opacity(exporter == nil ? 0.35 : (isExporting ? 0.5 : 1))   // dim while working
+            shareButton
         }
         .padding(.horizontal, Theme.Space.l)
         .padding(.top, Theme.Space.s)
     }
 
+    /// Landscape: the same buttons as a left rail — Gallery top, Undo/Redo centred, Share bottom.
+    private var actionRail: some View {
+        VStack(spacing: Theme.Space.m) {
+            galleryButton
+            Spacer(minLength: 0)
+            undoButton
+            redoButton
+            Spacer(minLength: 0)
+            shareButton
+        }
+        .padding(.vertical, Theme.Space.s)
+    }
+
     // MARK: Tool strip (underneath the image)
 
-    private var toolStrip: some View {
+    private func toolStrip(axis: Axis) -> some View {
         ToolBar(
             actions: [
                 ToolBarAction(id: "styles", title: "Styles", systemImage: "wand.and.stars", tinted: showStyles) {
@@ -584,23 +666,27 @@ public struct EditorView: View {
             ],
             selected: model.selectedTool,
             editedTools: editedTools,
-            highlightSelection: !showStyles   // in Styles mode the Styles chip is the active one
-        ) { tool in
-            let wasShowingStyles = showStyles
-            // Reaching for a tool turns the active style into the manual starting point.
-            if model.hasActiveStyle { model.bakeStyle() }
-            showStyles = false
-            // Tapping the already-selected tool that carries an edit reverts it to 0 — the same
-            // action as its X, just on the chip itself. (Not when arriving from Styles mode, where
-            // the tap is really a selection.)
-            if !wasShowingStyles, model.selectedTool == tool, model.value(of: tool) != 0 {
-                model.beginInteraction()
-                model.update(tool, to: 0)
-                model.endInteraction()
-                Haptics.impact(.rigid)
-            } else {
-                withAnimation(Theme.Motion.snappy) { model.selectedTool = tool }
-            }
+            highlightSelection: !showStyles,   // in Styles mode the Styles chip is the active one
+            axis: axis,
+            onSelect: handleToolSelect
+        )
+    }
+
+    private func handleToolSelect(_ tool: EditTool) {
+        let wasShowingStyles = showStyles
+        // Reaching for a tool turns the active style into the manual starting point.
+        if model.hasActiveStyle { model.bakeStyle() }
+        showStyles = false
+        // Tapping the already-selected tool that carries an edit reverts it to 0 — the same action
+        // as its X, just on the chip itself. (Not when arriving from Styles mode, where the tap is
+        // really a selection.)
+        if !wasShowingStyles, model.selectedTool == tool, model.value(of: tool) != 0 {
+            model.beginInteraction()
+            model.update(tool, to: 0)
+            model.endInteraction()
+            Haptics.impact(.rigid)
+        } else {
+            withAnimation(Theme.Motion.snappy) { model.selectedTool = tool }
         }
     }
 
@@ -636,17 +722,21 @@ public struct EditorView: View {
 
     // MARK: Crop chrome (rotate/flip where the tool chips sit; Done + X like the editor)
 
+    /// Rotate/flip buttons — laid out in an HStack (portrait) or VStack (landscape rail).
+    @ViewBuilder
+    private var cropButtons: some View {
+        GlassIconButton("rotate.left", label: "Rotate left", size: 54) { model.rotateQuarter(-1); Haptics.impact(.light) }
+        GlassIconButton("rotate.right", label: "Rotate right", size: 54) { model.rotateQuarter(1); Haptics.impact(.light) }
+        GlassIconButton("arrow.left.and.right.righttriangle.left.righttriangle.right", label: "Flip horizontally", size: 54) { model.toggleFlipH(); Haptics.impact(.light) }
+        GlassIconButton("arrow.up.and.down.righttriangle.up.righttriangle.down", label: "Flip vertically", size: 54) { model.toggleFlipV(); Haptics.impact(.light) }
+    }
+
     private var cropToolStrip: some View {
         // 54pt buttons + 10 vertical padding == the ToolBar's height, so the image doesn't shift
         // size between the normal tools and crop.
-        HStack(spacing: Theme.Space.l) {
-            GlassIconButton("rotate.left", label: "Rotate left", size: 54) { model.rotateQuarter(-1); Haptics.impact(.light) }
-            GlassIconButton("rotate.right", label: "Rotate right", size: 54) { model.rotateQuarter(1); Haptics.impact(.light) }
-            GlassIconButton("arrow.left.and.right.righttriangle.left.righttriangle.right", label: "Flip horizontally", size: 54) { model.toggleFlipH(); Haptics.impact(.light) }
-            GlassIconButton("arrow.up.and.down.righttriangle.up.righttriangle.down", label: "Flip vertically", size: 54) { model.toggleFlipV(); Haptics.impact(.light) }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
+        HStack(spacing: Theme.Space.l) { cropButtons }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
     }
 
     private var cropActionBar: some View {

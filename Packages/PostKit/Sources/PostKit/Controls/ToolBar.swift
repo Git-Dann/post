@@ -31,6 +31,9 @@ public struct ToolBar: View {
     /// When false (e.g. while a mode like Styles is active), no dial tool shows the selected
     /// highlight — so the active *mode* chip reads as the current selection instead.
     private let highlightSelection: Bool
+    /// Horizontal strip (portrait) or vertical rail (landscape). Only the container/divider/edge-fade
+    /// orientation changes — every chip is shared.
+    private let axis: Axis
     private let onSelect: (EditTool) -> Void
 
     public init(
@@ -39,6 +42,7 @@ public struct ToolBar: View {
         tools: [EditTool] = EditTool.dialTools,
         editedTools: Set<EditTool> = [],
         highlightSelection: Bool = true,
+        axis: Axis = .horizontal,
         onSelect: @escaping (EditTool) -> Void
     ) {
         self.actions = actions
@@ -46,51 +50,63 @@ public struct ToolBar: View {
         self.tools = tools
         self.editedTools = editedTools
         self.highlightSelection = highlightSelection
+        self.axis = axis
         self.onSelect = onSelect
     }
 
+    private var isVertical: Bool { axis == .vertical }
+
     public var body: some View {
         ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: Theme.Space.m) {
-                    // Styles & Crop live to the left, off-screen by default — scroll left to reach
-                    // them, so the dial tools own the visible strip.
+            ScrollView(isVertical ? .vertical : .horizontal, showsIndicators: false) {
+                // Same chips; AnyLayout swaps the stack axis so there's a single view tree.
+                let layout = isVertical
+                    ? AnyLayout(VStackLayout(spacing: Theme.Space.m))
+                    : AnyLayout(HStackLayout(spacing: Theme.Space.m))
+                layout {
+                    // Styles & Crop lead the strip; the dial tools own the visible run.
                     ForEach(actions) { action in
                         actionChip(action)
                     }
-                    if !actions.isEmpty {
-                        Divider()
-                            .frame(height: 32)
-                            .overlay(.white.opacity(0.15))
-                    }
+                    if !actions.isEmpty { divider }
                     ForEach(tools) { tool in
                         chip(tool).id(tool)
                     }
                 }
-                .padding(.horizontal, Theme.Space.l)
-                // Room so the selected chip's 1.12× scale, the dot, and the glass halo aren't clipped.
-                .padding(.vertical, 10)
+                .padding(isVertical ? .vertical : .horizontal, Theme.Space.l)
+                // Room so the selected chip's 1.12× scale and the glass halo aren't clipped.
+                .padding(isVertical ? .horizontal : .vertical, 10)
             }
             .scrollClipDisabled()
-            // Soft fade at each end hints there's more beyond (Crop/Styles left, more tools right).
-            .overlay(alignment: .leading) { edgeFade(.leading) }
-            .overlay(alignment: .trailing) { edgeFade(.trailing) }
+            // Soft fade at each end hints there's more beyond.
+            .overlay(alignment: isVertical ? .top : .leading) { edgeFade(leading: true) }
+            .overlay(alignment: isVertical ? .bottom : .trailing) { edgeFade(leading: false) }
             .onAppear {
-                // Start scrolled so the first dial tool is at the leading edge (actions hidden left).
-                if !actions.isEmpty, let first = tools.first {
+                // Horizontal: start scrolled past Styles/Crop to the first dial tool. Vertical:
+                // leave Styles/Crop visible at the top (they're primary in the rail).
+                if !isVertical, !actions.isEmpty, let first = tools.first {
                     proxy.scrollTo(first, anchor: .leading)
                 }
             }
         }
     }
 
-    private func edgeFade(_ edge: HorizontalEdge) -> some View {
+    @ViewBuilder
+    private var divider: some View {
+        if isVertical {
+            Divider().frame(width: 32).overlay(.white.opacity(0.15))
+        } else {
+            Divider().frame(height: 32).overlay(.white.opacity(0.15))
+        }
+    }
+
+    private func edgeFade(leading: Bool) -> some View {
         LinearGradient(
-            colors: edge == .leading ? [.black, .clear] : [.clear, .black],
-            startPoint: .leading,
-            endPoint: .trailing
+            colors: leading ? [.black, .clear] : [.clear, .black],
+            startPoint: isVertical ? .top : .leading,
+            endPoint: isVertical ? .bottom : .trailing
         )
-        .frame(width: 28)
+        .frame(width: isVertical ? nil : 28, height: isVertical ? 28 : nil)
         .allowsHitTesting(false)
     }
 
