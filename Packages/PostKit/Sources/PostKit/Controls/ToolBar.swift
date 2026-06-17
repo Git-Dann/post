@@ -106,7 +106,10 @@ public struct ToolBar: View {
             startPoint: isVertical ? .top : .leading,
             endPoint: isVertical ? .bottom : .trailing
         )
+        // 28pt thick along the fade axis, and stretched FULL across the other axis so it spans the
+        // whole rail/strip edge-to-edge (a gradient won't expand the cross axis on its own).
         .frame(width: isVertical ? nil : 28, height: isVertical ? 28 : nil)
+        .frame(maxWidth: isVertical ? .infinity : nil, maxHeight: isVertical ? nil : .infinity)
         .allowsHitTesting(false)
     }
 
