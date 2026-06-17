@@ -874,16 +874,12 @@ public struct EditorView: View {
         let noSubject = model.maskUnavailable && regional && !model.isPreparingMask
         let tint: Color = noSubject ? .orange : (regional ? Theme.accent : .white)
         return Menu {
-            // Text-only rows with a checkmark on the active scope. We deliberately drop the per-row
-            // SF Symbols: the app's accent tint colours menu icons, so showing icons turned every row
-            // yellow. The checkmark (the one tinted element) now marks only the current scope.
+            // Plain text rows — no icons, no checkmark. The active scope is tinted in the accent
+            // colour so only it reads as chosen.
             ForEach(SelectiveScope.allCases, id: \.self) { s in
                 Button { selectScope(s) } label: {
-                    if model.scope == s {
-                        Label(s.title, systemImage: "checkmark")
-                    } else {
-                        Text(s.title)
-                    }
+                    Text(s.title)
+                        .foregroundStyle(model.scope == s ? Theme.accent : Color.primary)
                 }
             }
         } label: {
@@ -935,17 +931,17 @@ public struct EditorView: View {
         revealScope()
     }
 
-    /// Flash the selection: dim the un-edited region for a beat, then fade. No-op for whole-photo or
+    /// Flash the selection: a quick dim of the un-edited region, then gone. No-op for whole-photo or
     /// while the mask is still computing (the async path re-triggers this once it's ready).
     private func revealScope() {
         guard model.scope.isRegional, let cg = model.scopeMaskDisplayImage() else { return }
         scopeMaskImage = cg
         scopeRevealTask?.cancel()
-        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) { scopeRevealActive = true }
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) { scopeRevealActive = true }
         scopeRevealTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(1200))
+            try? await Task.sleep(for: .milliseconds(380))
             guard !Task.isCancelled else { return }
-            withAnimation(reduceMotion ? nil : .easeIn(duration: 0.5)) { scopeRevealActive = false }
+            withAnimation(reduceMotion ? nil : .easeIn(duration: 0.28)) { scopeRevealActive = false }
         }
     }
 
