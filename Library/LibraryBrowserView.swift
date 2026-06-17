@@ -135,7 +135,8 @@ private struct AssetThumbnail: View {
             .overlay(alignment: .topTrailing) { badge }
             .contentShape(Rectangle())
             .task(id: asset.localIdentifier) {
-                image = await PhotoLibrary.thumbnail(for: asset, size: CGSize(width: 240, height: 240))
+                // Generous target so cells stay crisp at 3× (the grid cells are ~90–130pt wide).
+                image = await PhotoLibrary.thumbnail(for: asset, size: CGSize(width: 400, height: 400))
             }
     }
 

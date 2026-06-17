@@ -38,8 +38,8 @@ enum PhotoLibrary {
     static func thumbnail(for asset: PHAsset, size: CGSize) async -> UIImage? {
         await withCheckedContinuation { (cont: CheckedContinuation<ImageBox, Never>) in
             let opt = PHImageRequestOptions()
-            opt.deliveryMode = .fastFormat
-            opt.resizeMode = .fast
+            opt.deliveryMode = .highQualityFormat   // sharp (fastFormat returns tiny cached thumbs)
+            opt.resizeMode = .exact
             opt.isNetworkAccessAllowed = true
             PHImageManager.default().requestImage(
                 for: asset, targetSize: size, contentMode: .aspectFill, options: opt
