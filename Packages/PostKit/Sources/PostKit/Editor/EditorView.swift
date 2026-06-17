@@ -326,6 +326,7 @@ public struct EditorView: View {
                 Image(systemName: active ? "eye.fill" : "eye")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(active ? Theme.accent : .white)
+                    .symbolEffect(.bounce, value: showingOriginal)   // subtle confirm on toggle
             )
             .contentShape(Circle())
             .glassEffect(.regular.interactive(), in: .circle)
@@ -915,6 +916,7 @@ public struct EditorView: View {
                 } else {
                     Image(systemName: noSubject ? "exclamationmark.triangle.fill" : model.scope.systemImage)
                         .font(.system(size: 13, weight: .semibold))
+                        .symbolEffect(.bounce, value: model.scope)   // gentle bounce when scope changes
                 }
                 Text(noSubject ? "No subject" : model.scope.shortTitle)
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
