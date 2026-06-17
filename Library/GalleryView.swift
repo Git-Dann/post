@@ -32,11 +32,13 @@ struct GalleryView: View {
     @State private var showPicker = false
     @State private var showBrowser = false
     @State private var showPrimer = false
+    @State private var showTour = false
     @State private var infoSheet: InfoSheet?
     @State private var floatIcon = false
     @State private var loadError = false
     @AppStorage(ExportPrefs.removeLocationKey, store: .postShared) private var removeLocation = true
     @AppStorage("hasPrimedPhotoAccess") private var hasPrimedPhotoAccess = false
+    @AppStorage("hasSeenTour") private var hasSeenTour = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var zoomNS
 
@@ -90,17 +92,20 @@ struct GalleryView: View {
                 onSkip: { finishPriming() }
             )
         }
+        .sheet(isPresented: $showTour, onDismiss: {
+            hasSeenTour = true
+            primePhotoAccessIfNeeded()   // run the photo primer after the welcome, not on top of it
+        }) {
+            WelcomeTour { showTour = false }
+        }
         .onChange(of: pickerItems) { _, items in
             guard !items.isEmpty else { return }
             importItems(items)
         }
         .task {
-            // First launch: offer full library access once. Skipping is fine — the picker works
-            // without it, and it can be turned on later in Settings.
-            if !hasPrimedPhotoAccess {
-                if PhotoLibrary.status == .notDetermined { showPrimer = true }
-                else { hasPrimedPhotoAccess = true }
-            }
+            // First launch: show the welcome tour once, then the photo primer on dismiss. Returning
+            // users skip straight to the primer check.
+            if !hasSeenTour { showTour = true } else { primePhotoAccessIfNeeded() }
             #if DEBUG
             let args = ProcessInfo.processInfo.arguments
             if args.contains("--seed-project"), projects.isEmpty { seedSampleProject() }
@@ -120,6 +125,14 @@ struct GalleryView: View {
     private func finishPriming() {
         hasPrimedPhotoAccess = true
         showPrimer = false
+    }
+
+    /// Offer full library access once. Skipping is fine — the picker works without it, and it can be
+    /// enabled later in Settings.
+    private func primePhotoAccessIfNeeded() {
+        guard !hasPrimedPhotoAccess else { return }
+        if PhotoLibrary.status == .notDetermined { showPrimer = true }
+        else { hasPrimedPhotoAccess = true }
     }
 
     // MARK: Header & title
