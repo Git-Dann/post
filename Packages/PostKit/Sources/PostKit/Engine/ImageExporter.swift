@@ -26,14 +26,14 @@ public actor ImageExporter {
 
     public enum ExportError: Error { case decodeFailed, renderFailed, encodeFailed }
 
-    /// A friendly export filename: "Edited <source name>.<ext>", e.g. "Edited IMG_1234.heic".
-    /// Falls back to "Edited Photo" when the original carried no usable name.
+    /// A friendly export filename: "<source name> Edited.<ext>", e.g. "IMG_1234 Edited.heic".
+    /// Falls back to "Photo Edited" when the original carried no usable name.
     public nonisolated static func suggestedFileName(forOriginal original: String?,
                                                      format: Format) -> String {
         let base = (original as NSString?)?.deletingPathExtension
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let name = (base?.isEmpty == false) ? base! : "Photo"
-        return "Edited \(name).\(format.fileExtension)"
+        return "\(name) Edited.\(format.fileExtension)"
     }
 
     private let ciContext: CIContext

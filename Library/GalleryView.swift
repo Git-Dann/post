@@ -116,7 +116,7 @@ struct GalleryView: View {
         // here forced the in-process picker, which needed authorization and could present black.)
         .photosPicker(isPresented: $showPicker, selection: $pickerItems, matching: .images)
         .sheet(isPresented: $showBrowser) {
-            LibraryBrowserView { datas in createProjects(from: datas.map { ($0, nil) }) }
+            LibraryBrowserView { items in createProjects(from: items) }
         }
         .sheet(isPresented: $showPrimer, onDismiss: {
             // If they just granted access, take them straight into their library to pick photos —

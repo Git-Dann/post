@@ -6,7 +6,7 @@ import PostKit
 /// user has granted full (or limited) access; otherwise the gallery uses the system picker.
 struct LibraryBrowserView: View {
     /// Called with the chosen assets' full-resolution data when the user taps Import.
-    let onImport: ([Data]) -> Void
+    let onImport: ([(data: Data, name: String?)]) -> Void
     @Environment(\.dismiss) private var dismiss
 
     @State private var fetchResult: PHFetchResult<PHAsset>?
@@ -103,11 +103,13 @@ struct LibraryBrowserView: View {
         isImporting = true
         let chosen = PhotoLibrary.assets(withIdentifiers: selection)
         Task {
-            var datas: [Data] = []
+            var items: [(data: Data, name: String?)] = []
             for asset in chosen {
-                if let data = await PhotoLibrary.fullData(for: asset) { datas.append(data) }
+                if let data = await PhotoLibrary.fullData(for: asset) {
+                    items.append((data, PhotoLibrary.originalFilename(for: asset)))
+                }
             }
-            onImport(datas)
+            onImport(items)
             dismiss()
         }
     }

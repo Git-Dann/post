@@ -32,6 +32,13 @@ enum PhotoLibrary {
         return PHAsset.fetchAssets(with: .image, options: options)
     }
 
+    /// The asset's original filename (e.g. "IMG_1234.HEIC"), so edits exported from the in-app
+    /// browser can be named after the source photo. Reads the asset's resource metadata on-device.
+    static func originalFilename(for asset: PHAsset) -> String? {
+        let resources = PHAssetResource.assetResources(for: asset)
+        return (resources.first { $0.type == .photo } ?? resources.first)?.originalFilename
+    }
+
     /// Resolve a handful of selected identifiers back to assets (preserving the user's tap order).
     /// Fetches only the chosen assets — never the whole library.
     static func assets(withIdentifiers ids: [String]) -> [PHAsset] {
