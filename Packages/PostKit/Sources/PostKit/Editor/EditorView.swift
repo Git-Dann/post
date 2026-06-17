@@ -441,10 +441,21 @@ public struct EditorView: View {
             editedTools: editedTools,
             highlightSelection: !showStyles   // in Styles mode the Styles chip is the active one
         ) { tool in
+            let wasShowingStyles = showStyles
             // Reaching for a tool turns the active style into the manual starting point.
             if model.hasActiveStyle { model.bakeStyle() }
             showStyles = false
-            withAnimation(Theme.Motion.snappy) { model.selectedTool = tool }
+            // Tapping the already-selected tool that carries an edit reverts it to 0 — the same
+            // action as its X, just on the chip itself. (Not when arriving from Styles mode, where
+            // the tap is really a selection.)
+            if !wasShowingStyles, model.selectedTool == tool, model.value(of: tool) != 0 {
+                model.beginInteraction()
+                model.update(tool, to: 0)
+                model.endInteraction()
+                Haptics.impact(.rigid)
+            } else {
+                withAnimation(Theme.Motion.snappy) { model.selectedTool = tool }
+            }
         }
     }
 
