@@ -25,17 +25,41 @@ public struct StyleStrip: View {
             HStack(alignment: .top, spacing: Theme.Space.m) {
                 // Baselines first: OG (the original) and ZERO (a flat "Process Zero" base).
                 ForEach(Style.baselines) { chip($0) }
-                // The same divider as the tool strip, separating baselines from the creative looks.
-                Rectangle()
-                    .fill(.white.opacity(0.15))
-                    .frame(width: 1, height: 76)
-                ForEach(styles) { chip($0) }
+                // Divider, then the house looks.
+                divider
+                ForEach(houseStyles) { chip($0) }
+                // A divider before each collaborator collection (e.g. "Chunk").
+                ForEach(collections, id: \.name) { group in
+                    divider
+                    ForEach(group.styles) { chip($0) }
+                }
             }
             .padding(.horizontal, Theme.Space.l)
         }
         .task(id: source.extent.debugDescription) {
             renderThumbnails()
         }
+    }
+
+    private var divider: some View {
+        Rectangle()
+            .fill(.white.opacity(0.15))
+            .frame(width: 1, height: 76)
+    }
+
+    /// House looks have no collection; collaborator looks are grouped by their collection.
+    private var houseStyles: [Style] { styles.filter { $0.collection == nil } }
+
+    /// Collaborator collections in first-seen order, each with its styles.
+    private var collections: [(name: String, styles: [Style])] {
+        var order: [String] = []
+        var byName: [String: [Style]] = [:]
+        for style in styles {
+            guard let c = style.collection else { continue }
+            if byName[c] == nil { order.append(c) }
+            byName[c, default: []].append(style)
+        }
+        return order.map { (name: $0, styles: byName[$0] ?? []) }
     }
 
     private func chip(_ style: Style) -> some View {

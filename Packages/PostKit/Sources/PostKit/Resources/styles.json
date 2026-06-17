@@ -12,9 +12,9 @@
     { "id": "sepia",  "name": "Sepia",  "recipe": { "saturation": -0.8, "hue": 0.05, "fade": 0.22, "brightness": 0.04 } },
     { "id": "dream",  "name": "Dream",  "recipe": { "fade": 0.42, "brightness": 0.08, "contrast": -0.08, "saturation": 0.14 } },
 
-    { "id": "goldenhour", "name": "Golden Hour", "artist": "Mara Vinten", "collection": "Summer Series",
+    { "id": "goldenhour", "name": "Golden Hour", "artist": "Chunk", "collection": "Chunk",
       "recipe": { "hue": 0.05, "saturation": 0.18, "brightness": 0.06, "fade": 0.18, "contrast": 0.06 } },
-    { "id": "midnight",   "name": "Midnight",    "artist": "Mara Vinten", "collection": "Summer Series",
+    { "id": "midnight",   "name": "Midnight",    "artist": "Chunk", "collection": "Chunk",
       "recipe": { "hue": -0.06, "saturation": -0.12, "brightness": -0.04, "contrast": 0.22, "fade": 0.06 } }
   ]
 }

@@ -90,9 +90,9 @@ public enum FilterPipeline {
         guard s.brightness != 0 || s.contrast != 0 || s.saturation != 0 else { return image }
         let f = CIFilter.colorControls()
         f.inputImage = image
-        f.brightness = Float(s.brightness * 0.4)        // additive, kept subtle
-        f.contrast = Float(1 + s.contrast * 0.45)       // multiplicative around 1
-        f.saturation = Float(max(0, 1 + s.saturation))  // 0 = grayscale, 2 = punchy
+        f.brightness = Float(s.brightness) * FilterTuning.brightnessGain  // additive, kept subtle
+        f.contrast = 1 + Float(s.contrast) * FilterTuning.contrastGain     // multiplicative around 1
+        f.saturation = Float(max(0, 1 + s.saturation))                     // 0 = grayscale, 2 = punchy
         return f.outputImage ?? image
     }
 
@@ -102,7 +102,7 @@ public enum FilterPipeline {
         guard s.exposure != 0 else { return image }
         let f = CIFilter.exposureAdjust()
         f.inputImage = image
-        f.ev = Float(s.exposure * 1.5)                  // ±1.5 stops at the extremes
+        f.ev = Float(s.exposure) * FilterTuning.exposureEV
         return f.outputImage ?? image
     }
 
@@ -112,11 +112,13 @@ public enum FilterPipeline {
         guard s.warmth != 0 || s.tint != 0 else { return image }
         let f = CIFilter.temperatureAndTint()
         f.inputImage = image
-        // Treat the source white as daylight (6500K) and remap it: a LOWER target temperature warms
-        // the image toward amber, higher cools it toward blue; the tint axis runs green↔magenta.
-        // (Hand-tuned magnitudes; flip a sign if a direction reads inverted on a real photo.)
-        f.neutral = CIVector(x: 6500, y: 0)
-        f.targetNeutral = CIVector(x: 6500 - s.warmth * 2500, y: -s.tint * 50)
+        // Treat the source white as daylight and remap it: a LOWER target temperature warms the
+        // image toward amber, higher cools it toward blue; the tint axis runs green↔magenta.
+        // (Magnitudes/sign live in FilterTuning; flip a sign there if a direction reads inverted.)
+        let base = FilterTuning.whiteBalanceBaseK
+        f.neutral = CIVector(x: base, y: 0)
+        f.targetNeutral = CIVector(x: base - s.warmth * FilterTuning.warmthRangeK,
+                                   y: -s.tint * FilterTuning.tintRange)
         return f.outputImage ?? image
     }
 
@@ -127,8 +129,8 @@ public enum FilterPipeline {
         // A pivoted tone curve: lift/deepen the low quarter (shadows) and the high quarter
         // (highlights) while pinning the black/white points (0,0)/(1,1) and the midtone anchor — so
         // it's fully bipolar and doesn't clip, unlike highlightShadowAdjust's one-sided highlight.
-        let sh = s.shadows * 0.18
-        let hi = s.highlights * 0.18
+        let sh = s.shadows * FilterTuning.shadowLift
+        let hi = s.highlights * FilterTuning.highlightLift
         let f = CIFilter.toneCurve()
         f.inputImage = image
         f.point0 = CGPoint(x: 0.0, y: 0.0)
@@ -155,11 +157,11 @@ public enum FilterPipeline {
         guard s.sharpness > 0 else { return image }
         let f = CIFilter.sharpenLuminance()
         f.inputImage = image
-        f.sharpness = Float(min(max(s.sharpness, 0), 1) * 1.2)
+        f.sharpness = Float(min(max(s.sharpness, 0), 1)) * FilterTuning.sharpenMax
         // Radius is in pixels, so it must scale with resolution to match preview↔export — same
         // grainScale trick as grain (divide here, since a smaller preview needs a smaller radius
         // for the same *relative* halo).
-        f.radius = Float(1.6 / max(grainScale, 0.001))
+        f.radius = FilterTuning.sharpenRadius / Float(max(grainScale, 0.001))
         return f.outputImage ?? image
     }
 
@@ -169,8 +171,8 @@ public enum FilterPipeline {
         guard s.vignette > 0 else { return image }
         let f = CIFilter.vignette()
         f.inputImage = image
-        f.intensity = Float(s.vignette * 1.3)           // subtle → strong
-        f.radius = Float(1.0 + s.vignette)              // pull the falloff inward as it deepens
+        f.intensity = Float(s.vignette) * FilterTuning.vignetteIntensity   // subtle → strong
+        f.radius = 1.0 + Float(s.vignette) * FilterTuning.vignetteRadius    // falloff pulls inward
         return f.outputImage ?? image
     }
 
@@ -180,7 +182,7 @@ public enum FilterPipeline {
         guard s.hue != 0 else { return image }
         let f = CIFilter.hueAdjust()
         f.inputImage = image
-        f.angle = Float(s.hue * .pi)                    // full wheel at ±1
+        f.angle = Float(s.hue) * FilterTuning.hueAngle  // full wheel at ±1
         return f.outputImage ?? image
     }
 
@@ -189,13 +191,14 @@ public enum FilterPipeline {
     static nonisolated func applyFade(_ image: CIImage, _ s: EditState) -> CIImage {
         guard s.fade > 0 else { return image }
         let d = s.fade
+        let lift = FilterTuning.fadeBlackLift, milk = FilterTuning.fadeWhiteMilk
         let f = CIFilter.toneCurve()
         f.inputImage = image
-        f.point0 = CGPoint(x: 0.0, y: 0.05 + 0.18 * d)  // lift the blacks — the fade
-        f.point1 = CGPoint(x: 0.25, y: 0.25 + 0.10 * d)
-        f.point2 = CGPoint(x: 0.5, y: 0.5)              // anchor midtones
-        f.point3 = CGPoint(x: 0.75, y: 0.75 - 0.04 * d)
-        f.point4 = CGPoint(x: 1.0, y: 0.95 - 0.05 * d)  // milk the highlights
+        f.point0 = CGPoint(x: 0.0, y: 0.05 + lift * d)        // lift the blacks — the fade
+        f.point1 = CGPoint(x: 0.25, y: 0.25 + lift * 0.55 * d)
+        f.point2 = CGPoint(x: 0.5, y: 0.5)                    // anchor midtones
+        f.point3 = CGPoint(x: 0.75, y: 0.75 - milk * 0.8 * d)
+        f.point4 = CGPoint(x: 1.0, y: 0.95 - milk * d)        // milk the highlights
         return f.outputImage ?? image
     }
 
@@ -213,10 +216,10 @@ public enum FilterPipeline {
         let extent = base.extent
         guard !extent.isInfinite, !extent.isNull, !extent.isEmpty else { return base }
 
-        // Grain feel — tune here. `strength` = overall intensity; `size` = noise cell size in px,
-        // where SMALLER = finer, less "thick" grain. (Was 0.22 / 1.4 — dialled finer + lighter.)
-        let strength = Float(min(max(amount, 0), 1) * 0.14)
-        let size = Float(0.8 * grainScale)                    // finer cells; grainScale matches preview↔export
+        // `strength` = overall intensity; `size` = noise cell size in px (smaller = finer). Both
+        // live in FilterTuning; size ×= grainScale so preview grain matches the export's density.
+        let strength = Float(min(max(amount, 0), 1)) * FilterTuning.grainStrength
+        let size = FilterTuning.grainCellSize * Float(grainScale)
         return kernel.apply(extent: extent, arguments: [base, strength, size]) ?? base
     }
 }

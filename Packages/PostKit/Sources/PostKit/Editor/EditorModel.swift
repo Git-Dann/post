@@ -260,21 +260,29 @@ public final class EditorModel: Identifiable {
     private func applyActiveStyleToState() {
         guard let recipe = activeStyle?.recipe else { return }
         let i = styleIntensity
+        state.exposure = recipe.exposure * i
         state.brightness = recipe.brightness * i
         state.contrast = recipe.contrast * i
+        state.highlights = recipe.highlights * i
+        state.shadows = recipe.shadows * i
         state.saturation = recipe.saturation * i
+        state.vibrance = recipe.vibrance * i
+        state.warmth = recipe.warmth * i
+        state.tint = recipe.tint * i
         state.hue = recipe.hue * i
+        state.sharpness = recipe.sharpness * i
+        state.vignette = recipe.vignette * i
         state.fade = recipe.fade * i
         state.grain = recipe.grain * i
     }
 
     private func clearToneColorFilm() {
-        state.brightness = 0
-        state.contrast = 0
-        state.saturation = 0
-        state.hue = 0
-        state.fade = 0
-        state.grain = 0
+        // Reset everything except geometry, so it tracks EditState's tone/colour/film fields.
+        let geometry = (state.crop, state.straightenAngle, state.rotationQuarterTurns,
+                        state.flippedHorizontally, state.flippedVertically)
+        state = EditState()
+        (state.crop, state.straightenAngle, state.rotationQuarterTurns,
+         state.flippedHorizontally, state.flippedVertically) = geometry
     }
 
     private func recompute() {
