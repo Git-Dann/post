@@ -287,9 +287,10 @@ public struct EditorView: View {
             }
         }
         // Top-left: compare-to-original (replaces the parked (i) — the gallery's long-press Info
-        // covers metadata). Tap toggles original on/off; press-and-hold peeks. Hidden with no edits.
+        // covers metadata). A constant control: tap toggles original on/off, press-and-hold peeks;
+        // disabled (dimmed, inert) until there's an edit to compare against.
         .overlay(alignment: .topLeading) {
-            if !model.isCropping && model.hasEdits { compareButton }
+            if !model.isCropping { compareButton }
         }
         // Aspect-ratio menu — top-right while cropping; the scope chip takes the same corner while a
         // tonal tool is active (the two modes never overlap).
@@ -320,16 +321,19 @@ public struct EditorView: View {
     /// by press duration, so they never fight.
     private var compareButton: some View {
         let active = showingOriginal
+        let enabled = model.hasEdits
         return Color.clear
             .frame(width: 38, height: 38)
             .overlay(
                 Image(systemName: active ? "eye.fill" : "eye")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(active ? Theme.accent : .white)
+                    .foregroundStyle(!enabled ? .white.opacity(0.35) : (active ? Theme.accent : .white))
                     .symbolEffect(.bounce, value: showingOriginal)   // subtle confirm on toggle
             )
             .contentShape(Circle())
             .glassEffect(.regular.interactive(), in: .circle)
+            .opacity(enabled ? 1 : 0.55)
+            .allowsHitTesting(enabled)
             .onLongPressGesture(minimumDuration: .infinity, maximumDistance: 40, perform: {}) { pressing in
                 if pressing {
                     comparePeekTask?.cancel()
