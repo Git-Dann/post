@@ -25,7 +25,7 @@ public final class EditorModel: Identifiable {
     public private(set) var displayImage: CIImage
 
     /// Currently selected adjustment tool, or nil for a neutral state (no dial shown).
-    public var selectedTool: EditTool? = .exposure
+    public var selectedTool: EditTool? = nil   // opens on the category overview, not a pre-picked tool
     /// Whether the crop geometry overlay is presented.
     public var isCropping = false
 

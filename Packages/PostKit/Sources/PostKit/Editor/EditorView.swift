@@ -37,6 +37,8 @@ public struct EditorView: View {
     @State private var inspectTile: CGImage?     // crisp full-res tile shown when settled & zoomed
     @State private var tileTask: Task<Void, Never>?
     @State private var showInfo = false
+    // Category-first tool strip: nil = the category overview; a group = that category's tools.
+    @State private var openCategory: EditTool.Group?
     // Selective-scope reveal: a brief dim of the un-edited region when a region is chosen.
     @State private var scopeRevealActive = false
     @State private var scopeMaskImage: CGImage?
@@ -769,27 +771,70 @@ public struct EditorView: View {
 
     // MARK: Tool strip (underneath the image)
 
+    /// Category-first tool strip. Level 1 shows category chips (Auto · Light · Colour · Effects ·
+    /// Crop · Styles); tapping a category reveals its tools (level 2, with a Back chip). One ToolBar
+    /// instance whose actions/tools swap by `openCategory`, so the chips animate in/out.
     private func toolStrip(axis: Axis) -> some View {
-        ToolBar(
-            actions: [
-                ToolBarAction(id: "styles", title: "Styles", systemImage: "wand.and.stars", tinted: showStyles) {
-                    // Tapping Styles opens the list. If a look is active, BROWSE it: keep the look
-                    // applied and land the list on that look (don't revert or jump to the front).
-                    isComparing = false
-                    browsingStyles = true
-                    showStyles = true   // instant; an animated swap doubles the dial momentarily
-                },
-                ToolBarAction(id: "crop", title: "Crop & Rotate", systemImage: "crop.rotate", showsDot: geometryEdited) {
-                    isComparing = false
-                    withAnimation(cropMotion) { model.beginCrop() }
-                }
-            ],
+        let level2 = openCategory != nil
+        return ToolBar(
+            actions: level2 ? [backAction] : categoryActions,
             selected: model.selectedTool,
+            tools: openCategory?.tools ?? [],
             editedTools: editedTools,
-            highlightSelection: !showStyles,   // in Styles mode the Styles chip is the active one
+            highlightSelection: level2,   // tool highlight only inside a category
             axis: axis,
             onSelect: handleToolSelect
         )
+    }
+
+    private var backAction: ToolBarAction {
+        ToolBarAction(id: "back", title: "Back", systemImage: "chevron.backward") {
+            withAnimation(reduceMotion ? nil : Theme.Motion.snappy) {
+                openCategory = nil
+                model.selectedTool = nil   // backing out hides the dial for a clean overview
+            }
+        }
+    }
+
+    private var categoryActions: [ToolBarAction] {
+        let edited = editedTools
+        func groupHasEdit(_ g: EditTool.Group) -> Bool { g.tools.contains { edited.contains($0) } }
+        return [
+            ToolBarAction(id: "auto", title: "Auto", systemImage: EditTool.auto.systemImage) {
+                handleToolSelect(.auto)   // one-tap action, no drill-in
+            },
+            ToolBarAction(id: "light", title: EditTool.Group.light.title,
+                          systemImage: EditTool.Group.light.systemImage, showsDot: groupHasEdit(.light)) {
+                drillInto(.light)
+            },
+            ToolBarAction(id: "colour", title: EditTool.Group.colour.title,
+                          systemImage: EditTool.Group.colour.systemImage, showsDot: groupHasEdit(.colour)) {
+                drillInto(.colour)
+            },
+            ToolBarAction(id: "effects", title: EditTool.Group.finishing.title,
+                          systemImage: EditTool.Group.finishing.systemImage, showsDot: groupHasEdit(.finishing)) {
+                drillInto(.finishing)
+            },
+            ToolBarAction(id: "crop", title: "Crop & Rotate", systemImage: "crop.rotate", showsDot: geometryEdited) {
+                isComparing = false
+                withAnimation(cropMotion) { model.beginCrop() }
+            },
+            ToolBarAction(id: "styles", title: "Styles", systemImage: "wand.and.stars", tinted: showStyles) {
+                // Open the list. If a look is active, BROWSE it (keep applied, land on it).
+                isComparing = false
+                browsingStyles = true
+                showStyles = true
+            }
+        ]
+    }
+
+    /// Drill into a category's tools.
+    private func drillInto(_ g: EditTool.Group) {
+        isComparing = false
+        if model.hasActiveStyle { model.bakeStyle() }
+        showStyles = false
+        browsingStyles = false
+        withAnimation(reduceMotion ? nil : Theme.Motion.snappy) { openCategory = g }
     }
 
     private func handleToolSelect(_ tool: EditTool) {

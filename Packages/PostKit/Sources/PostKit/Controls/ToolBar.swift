@@ -64,18 +64,20 @@ public struct ToolBar: View {
                     ? AnyLayout(VStackLayout(spacing: Theme.Space.m))
                     : AnyLayout(HStackLayout(spacing: Theme.Space.m))
                 layout {
-                    // Styles & Crop lead the strip; the dial tools own the visible run.
+                    // Leading action chips (categories, or Back). The chip transition lets the strip
+                    // swap between the category overview and a category's tools with a lively spring.
                     ForEach(actions) { action in
                         actionChip(action)
+                            .transition(.scale.combined(with: .opacity))
                     }
-                    if !actions.isEmpty { divider }
+                    if !actions.isEmpty && !tools.isEmpty { divider }
                     ForEach(Array(tools.enumerated()), id: \.offset) { index, tool in
-                        // Subtle group spacing: a short, faint tick whenever the group changes
-                        // (Auto · Light · Colour · Finishing), so the strip reads in sections.
+                        // Subtle group spacing: a short, faint tick whenever the group changes.
                         if index > 0, tools[index - 1].group != tool.group {
                             groupSeparator
                         }
                         chip(tool).id(tool)
+                            .transition(.scale.combined(with: .opacity))
                     }
                 }
                 .padding(isVertical ? .vertical : .horizontal, Theme.Space.l)

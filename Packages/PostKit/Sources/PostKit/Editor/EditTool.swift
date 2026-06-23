@@ -36,9 +36,39 @@ public enum EditTool: String, CaseIterable, Identifiable, Sendable {
 
     public var isGeometry: Bool { self == .crop }
 
-    /// Coarse grouping used to chunk the tool strip with subtle spacing — Auto · Light · Colour ·
-    /// Finishing — so a long scroll reads in sections without any extra navigation.
-    public enum Group: Sendable { case geometry, auto, light, colour, finishing }
+    /// Coarse grouping — Auto · Light · Colour · Effects. Drives the category-first tool strip: the
+    /// strip shows these categories, and tapping one reveals its tools.
+    public enum Group: Sendable, Hashable {
+        case geometry, auto, light, colour, finishing
+
+        /// The drillable adjustment categories, in strip order (Auto/Crop/Styles are handled as
+        /// direct actions, not drill-in categories).
+        public static let adjustmentCategories: [Group] = [.light, .colour, .finishing]
+
+        public var title: String {
+            switch self {
+            case .geometry: "Crop"
+            case .auto: "Auto"
+            case .light: "Light"
+            case .colour: "Colour"
+            case .finishing: "Effects"
+            }
+        }
+
+        /// Category emblem — chosen to stay distinct from each other at the category level.
+        public var systemImage: String {
+            switch self {
+            case .geometry: "crop.rotate"
+            case .auto: "sparkles"
+            case .light: "sun.max"
+            case .colour: "paintpalette"
+            case .finishing: "camera.filters"
+            }
+        }
+
+        /// The dial tools in this group, in display order.
+        public var tools: [EditTool] { EditTool.dialTools.filter { $0.group == self } }
+    }
 
     public var group: Group {
         switch self {
