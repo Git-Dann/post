@@ -246,9 +246,10 @@ public struct EditorView: View {
             // Selective reveal: when a region is chosen, briefly dim everything *outside* it so it's
             // obvious what the edit affects. Same ZStack as the image, so it aligns to the pixels.
             if scopeRevealActive, let scopeMaskImage, !model.isCropping {
-                Rectangle()
-                    .fill(.black.opacity(0.5))
-                    .mask(alignment: .center) { scopeVeilMask(scopeMaskImage) }
+                IridescentGlow()
+                    .mask(alignment: .center) { scopeSelectedMask(scopeMaskImage) }
+                    .blendMode(.plusLighter)
+                    .opacity(0.9)
                     .allowsHitTesting(false)
                     .transition(.opacity)
             }
@@ -937,6 +938,13 @@ public struct EditorView: View {
                 Capsule().strokeBorder(Theme.accent, lineWidth: 1.5)
             }
         }
+        .overlay {   // iridescent ring while on-device detection runs — the "finding the subject" cue
+            if model.isPreparingMask {
+                IridescentGlow()
+                    .mask(Capsule().strokeBorder(lineWidth: 2.5))
+                    .allowsHitTesting(false)
+            }
+        }
         .padding(Theme.Space.m)
         .animation(reduceMotion ? nil : Theme.Motion.snappy, value: model.scope)
         .accessibilityLabel("Adjustment area")
@@ -944,14 +952,14 @@ public struct EditorView: View {
         .accessibilityHint("Confines tonal edits to the subject or background")
     }
 
-    /// Masks the dim veil so it covers only the region NOT being edited (subject scope → dim the
-    /// background; background scope → dim the subject). The mask image is white on the subject.
+    /// Masks the iridescent glow so it lands on the region being EDITED (subject scope → over the
+    /// subject; background scope → over the background). The mask image is white on the subject.
     @ViewBuilder
-    private func scopeVeilMask(_ cg: CGImage) -> some View {
+    private func scopeSelectedMask(_ cg: CGImage) -> some View {
         let img = Image(decorative: cg, scale: displayScale).resizable()
         switch model.scope {
-        case .subject: img.colorInvert().luminanceToAlpha()   // veil where mask is dark (background)
-        default:       img.luminanceToAlpha()                 // veil where mask is light (subject)
+        case .background: img.colorInvert().luminanceToAlpha()   // glow where mask is dark (background)
+        default:          img.luminanceToAlpha()                 // glow where mask is light (subject)
         }
     }
 
@@ -963,17 +971,18 @@ public struct EditorView: View {
         revealScope()
     }
 
-    /// Flash the selection: a quick dim of the un-edited region, then gone. No-op for whole-photo or
-    /// while the mask is still computing (the async path re-triggers this once it's ready).
+    /// Flash an iridescent shimmer over the selected region, then fade. No-op for whole-photo or
+    /// while the mask is still computing (the async path re-triggers this once it's ready). The hold
+    /// is ~1s so the shimmer's sweep reads before it goes.
     private func revealScope() {
         guard model.scope.isRegional, let cg = model.scopeMaskDisplayImage() else { return }
         scopeMaskImage = cg
         scopeRevealTask?.cancel()
-        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) { scopeRevealActive = true }
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { scopeRevealActive = true }
         scopeRevealTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(380))
+            try? await Task.sleep(for: .milliseconds(950))
             guard !Task.isCancelled else { return }
-            withAnimation(reduceMotion ? nil : .easeIn(duration: 0.28)) { scopeRevealActive = false }
+            withAnimation(reduceMotion ? nil : .easeIn(duration: 0.45)) { scopeRevealActive = false }
         }
     }
 
