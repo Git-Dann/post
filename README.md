@@ -32,7 +32,28 @@ xcodebuild -scheme Post -destination 'platform=iOS Simulator,name=iPhone 17 Pro,
 xcodebuild -scheme PostKitTests -destination 'platform=iOS Simulator,OS=26.2' test
 ```
 
-Then open `Post.xcodeproj` in Xcode 26 to run on a device (needed to feel the haptics).
+Then open `Post.xcodeproj` in Xcode to run on a device (needed to feel the haptics).
+
+## Distributing
+
+Which Xcode produced the archive decides whether App Store Connect will take it. The SDK stamp is
+baked in at build time, so a rejected archive can never be re-uploaded — it needs rebuilding.
+
+- **TestFlight** accepts a *current* beta toolchain. When Apple ships a new beta, the previous one
+  stops being accepted, which is why an upload that worked last month can fail today.
+- **App Store submission** needs a release or RC toolchain, never a beta.
+- Current lists: <https://developer.apple.com/news/releases/>.
+
+Check an archive before uploading it:
+
+```sh
+Tools/preflight-upload.sh          # newest archive, or pass a path
+```
+
+The deployment target is iOS 26.0 and there are no availability guards, so a release Xcode can build
+this even while development happens on a beta. One caveat if you do: the concurrency annotations in
+`PhotosExtension/PhotoEditingViewController.swift` were written against the iOS 27 SDK's
+`PHContentEditingController`, so that file is where an older SDK is most likely to complain.
 
 ## Layout
 
