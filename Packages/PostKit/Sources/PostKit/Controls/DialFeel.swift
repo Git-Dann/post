@@ -19,6 +19,12 @@ public nonisolated enum DialFeel {
     /// more deliberate movement; lower shows more lines at once. (Balanced against the finer detents.)
     public static let pointsPerDetent: CGFloat = 18
 
+    /// Same idea for the landscape corner dials (``CornerDial``), geared finer because an arc is only
+    /// ~160pt long end to end — nothing coasts there, so one comfortable sweep has to be worth having.
+    /// A slow drag still clicks a step at a time; the velocity gain below lets a quick sweep cross
+    /// most of the range.
+    public static let arcPointsPerDetent: CGFloat = 5
+
     // MARK: Momentum (flick to coast)
 
     /// Per-frame velocity decay while coasting after a flick. Closer to 1.0 = longer glide.
