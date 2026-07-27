@@ -71,8 +71,9 @@ public struct EditorView: View {
     /// the corners, categories swiped. Cropping keeps its own side-rail arrangement.
     private var isCornerLayout: Bool { isLandscape && !model.isCropping }
 
-    /// Radius of the corner tick fans. Also sets the keep-out zone the category swipe respects.
-    private static let cornerDialRadius: CGFloat = 118
+    /// Shared corner-dial metrics (every corner uses the same runs and radius). The box height is also
+    /// what the category swipe keeps clear of at the top and bottom of the trailing edge.
+    private static let dialContour = DialContour(corner: .topLeading)
 
     /// - Parameters:
     ///   - exporter: produces a shareable file URL for the given recipe (full-res export),
@@ -278,7 +279,7 @@ public struct EditorView: View {
     private var bank: DialBank { DialBank.all[min(bankIndex, DialBank.all.count - 1)] }
 
     /// The active bank's tools, one per corner in reading order. Only the value needle moves when the
-    /// bank changes — the fan stays put, so a swipe reads as re-labelling the corners rather than a
+    /// bank changes — the rulers stay put, so a swipe reads as re-labelling the corners rather than a
     /// wholesale swap.
     private var cornerDials: some View {
         ZStack {
@@ -292,7 +293,7 @@ public struct EditorView: View {
                     systemImage: tool.systemImage,
                     label: tool.title,
                     readout: tool.readout(in: model.state),
-                    radius: Self.cornerDialRadius,
+                    contour: DialContour(corner: corner),
                     tint: tool.dialTint,
                     soundEnabled: soundEnabled,
                     onBegin: { beginCornerScrub(tool) },
@@ -330,8 +331,9 @@ public struct EditorView: View {
     // MARK: Category swipe (landscape)
 
     /// Swipe up/down on the centre-right of the screen to move between banks. Only fires for a
-    /// deliberate, mostly-vertical drag that starts clear of both right-hand dials, and never while
-    /// the photo is zoomed (that gesture is panning) or the styles panel is up.
+    /// deliberate, mostly-vertical drag that starts in the clear stretch of trailing edge between the
+    /// two right-hand dials, and never while the photo is zoomed (that gesture is panning) or the
+    /// styles panel is up.
     private func categorySwipe(in size: CGSize) -> some Gesture {
         DragGesture(minimumDistance: 24, coordinateSpace: .local)
             .onEnded { value in
@@ -343,15 +345,13 @@ public struct EditorView: View {
             }
     }
 
-    /// The live zone: right of centre, vertically middling, and outside the two right-hand tick fans
-    /// so a scrub can never double as a category change.
+    /// The live zone: right of centre and clear of the two right-hand dials. Now that a dial hugs the
+    /// edges it occupies a known box in its corner, so the keep-out is simply the band between them —
+    /// a scrub can never double as a category change.
     private func inCategorySwipeZone(_ point: CGPoint, size: CGSize) -> Bool {
         guard point.x > size.width * 0.55 else { return false }
-        guard point.y > size.height * 0.22, point.y < size.height * 0.78 else { return false }
-        let keepOut = Self.cornerDialRadius + 34
-        let toTop = hypot(size.width - point.x, point.y)
-        let toBottom = hypot(size.width - point.x, size.height - point.y)
-        return toTop > keepOut && toBottom > keepOut
+        let keepOut = Self.dialContour.size.height + 16
+        return point.y > keepOut && point.y < size.height - keepOut
     }
 
     private func stepBank(by delta: Int) {
@@ -929,23 +929,24 @@ public struct EditorView: View {
 
     // MARK: Action buttons (top bar in portrait, left rail in landscape — same buttons)
 
-    private var galleryButton: some View {
-        GlassIconButton("square.grid.2x2", label: "Gallery") { onCancel() }
+    private func galleryButton(size: CGFloat = 48) -> some View {
+        GlassIconButton("square.grid.2x2", label: "Gallery", size: size) { onCancel() }
     }
-    private var undoButton: some View {
-        GlassIconButton("arrow.uturn.backward", label: "Undo") { model.undo() }
+    private func undoButton(size: CGFloat = 48) -> some View {
+        GlassIconButton("arrow.uturn.backward", label: "Undo", size: size) { model.undo() }
             .disabled(!model.canUndo)
             .opacity(model.canUndo ? 1 : 0.35)
     }
-    private var redoButton: some View {
-        GlassIconButton("arrow.uturn.forward", label: "Redo") { model.redo() }
+    private func redoButton(size: CGFloat = 48) -> some View {
+        GlassIconButton("arrow.uturn.forward", label: "Redo", size: size) { model.redo() }
             .disabled(!model.canRedo)
             .opacity(model.canRedo ? 1 : 0.35)
     }
     /// Sits between Undo and Redo: revert every change back to the original (one step, undoable).
     /// Uses the "reset adjustments" glyph (sliders + reset loop) rather than another u-turn arrow.
-    private var revertButton: some View {
-        GlassIconButton("slider.horizontal.2.arrow.trianglehead.counterclockwise", label: "Revert all changes") {
+    private func revertButton(size: CGFloat = 48) -> some View {
+        GlassIconButton("slider.horizontal.2.arrow.trianglehead.counterclockwise",
+                        label: "Revert all changes", size: size) {
             guard model.hasEdits else { return }
             model.reset()   // instant — animating the dial-slot mode change would double the dial
             Haptics.impact(.rigid)
@@ -953,8 +954,8 @@ public struct EditorView: View {
         .disabled(!model.hasEdits)
         .opacity(model.hasEdits ? 1 : 0.35)
     }
-    private var shareButton: some View {
-        GlassIconButton(isExporting ? "ellipsis" : "square.and.arrow.up", label: "Share") { share() }
+    private func shareButton(size: CGFloat = 48) -> some View {
+        GlassIconButton(isExporting ? "ellipsis" : "square.and.arrow.up", label: "Share", size: size) { share() }
             .disabled(isExporting || exporter == nil)
             .opacity(exporter == nil ? 0.35 : (isExporting ? 0.5 : 1))   // dim while working
     }
@@ -965,11 +966,11 @@ public struct EditorView: View {
     private var topBar: some View {
         GlassEffectContainer {
             HStack {
-                galleryButton
+                galleryButton()
                 Spacer()
-                HStack(spacing: Theme.Space.s) { undoButton; revertButton; redoButton }
+                HStack(spacing: Theme.Space.s) { undoButton(); revertButton(); redoButton() }
                 Spacer()
-                shareButton
+                shareButton()
             }
         }
         .padding(.horizontal, Theme.Space.l)
@@ -981,16 +982,17 @@ public struct EditorView: View {
     /// dial or once the chrome goes idle — a tap anywhere brings it back.
     private var actionCluster: some View {
         let visible = chromeAwake && scrubbingTool == nil
+        // 44pt buttons: two rows of them clear the side runs of the dials above and below.
         return GlassEffectContainer {
             VStack(spacing: Theme.Space.s) {
                 HStack(spacing: Theme.Space.s) {
-                    undoButton
-                    revertButton
-                    redoButton
+                    undoButton(size: 44)
+                    revertButton(size: 44)
+                    redoButton(size: 44)
                 }
                 HStack(spacing: Theme.Space.s) {
-                    galleryButton
-                    shareButton
+                    galleryButton(size: 44)
+                    shareButton(size: 44)
                 }
             }
         }
@@ -1064,13 +1066,13 @@ public struct EditorView: View {
     private var actionRail: some View {
         GlassEffectContainer {
             VStack(spacing: Theme.Space.m) {
-                galleryButton
+                galleryButton()
                 Spacer(minLength: 0)
-                undoButton
-                revertButton
-                redoButton
+                undoButton()
+                revertButton()
+                redoButton()
                 Spacer(minLength: 0)
-                shareButton
+                shareButton()
             }
         }
         .padding(.vertical, Theme.Space.s)

@@ -1,9 +1,11 @@
 import SwiftUI
 
-/// Which screen corner an arc dial is seated in. The apex is the corner itself, and the tick fan
-/// sweeps the quarter between the two edges that meet there.
+/// Which screen corner an arc dial is seated in.
 public nonisolated enum DialCorner: String, CaseIterable, Sendable {
     case topLeading, topTrailing, bottomLeading, bottomTrailing
+
+    var isTrailing: Bool { self == .topTrailing || self == .bottomTrailing }
+    var isBottom: Bool { self == .bottomLeading || self == .bottomTrailing }
 
     var alignment: Alignment {
         switch self {
@@ -22,75 +24,157 @@ public nonisolated enum DialCorner: String, CaseIterable, Sendable {
         case .bottomTrailing: .bottomTrailing
         }
     }
+}
 
-    /// Where the ticks radiate from, in the dial's own coordinate space.
-    func apex(in size: CGSize) -> CGPoint {
-        switch self {
-        case .topLeading: CGPoint(x: 0, y: 0)
-        case .topTrailing: CGPoint(x: size.width, y: 0)
-        case .bottomLeading: CGPoint(x: 0, y: size.height)
-        case .bottomTrailing: CGPoint(x: size.width, y: size.height)
+/// A unit direction in a dial's own space. Quarter turns are named for how they read on screen
+/// (SwiftUI's y grows downward, so "left" is anticlockwise as drawn).
+public nonisolated struct DialVector: Sendable, Equatable {
+    public var dx: CGFloat
+    public var dy: CGFloat
+
+    var turnedLeft: DialVector { DialVector(dx: -dy, dy: dx) }
+    var turnedRight: DialVector { DialVector(dx: dy, dy: -dx) }
+}
+
+/// The tick contour for one corner: two straight runs, each parallel to the screen edge it follows,
+/// joined by a rounded corner — so the ruler traces the outline of the device instead of radiating
+/// out of the corner. Ticks stand perpendicular to it, like markings machined into a bezel.
+///
+/// Everything a ``CornerDial`` draws or touches (ticks, needle, trace, hit band, the readout pocket)
+/// comes from ``sample(_:)``, so the shape is described exactly once.
+public nonisolated struct DialContour: Sendable {
+    public let corner: DialCorner
+    /// How far the outer tick tips sit inside the safe area's edges.
+    public var edgeGap: CGFloat
+    /// The contour's own corner radius, measured at the tick tips.
+    public var cornerRadius: CGFloat
+    /// Straight run along the top/bottom edge — the long one, since width is the plentiful axis.
+    public var horizontalRun: CGFloat
+    /// Straight run along the leading/trailing edge. Kept short so the two dials sharing a side leave
+    /// a gap between them for the action cluster and the category swipe.
+    public var verticalRun: CGFloat
+
+    public init(
+        corner: DialCorner,
+        edgeGap: CGFloat = 8,
+        cornerRadius: CGFloat = 56,
+        horizontalRun: CGFloat = 116,
+        verticalRun: CGFloat = 48
+    ) {
+        self.corner = corner
+        self.edgeGap = edgeGap
+        self.cornerRadius = cornerRadius
+        self.horizontalRun = horizontalRun
+        self.verticalRun = verticalRun
+    }
+
+    /// The box the dial occupies in its corner.
+    public var size: CGSize {
+        CGSize(width: edgeGap + cornerRadius + horizontalRun,
+               height: edgeGap + cornerRadius + verticalRun)
+    }
+
+    /// Total finger travel from one end of the ruler to the other.
+    public var length: CGFloat { verticalRun + cornerRadius * .pi / 2 + horizontalRun }
+
+    private var apex: CGPoint {
+        CGPoint(x: corner.isTrailing ? size.width : 0, y: corner.isBottom ? size.height : 0)
+    }
+    private var inwardX: CGFloat { corner.isTrailing ? -1 : 1 }
+    private var inwardY: CGFloat { corner.isBottom ? -1 : 1 }
+
+    /// The middle of the rounded corner — a pocket the tick tips curve around, where the readout sits.
+    public var pocket: CGPoint {
+        CGPoint(x: apex.x + inwardX * (edgeGap + cornerRadius),
+                y: apex.y + inwardY * (edgeGap + cornerRadius))
+    }
+
+    /// Clearance from ``pocket`` to the nearest tick, for sizing what goes in there.
+    public func pocketRadius(tickLength: CGFloat) -> CGFloat { cornerRadius - tickLength }
+
+    /// Tick tip and outward normal at value position `t` (0 = range floor, 1 = ceiling).
+    ///
+    /// The walk runs side-edge → corner → top/bottom edge; the bottom corners read it backwards. Either
+    /// way the high end of the range is the end further up the screen, so dragging a finger up the
+    /// ruler raises the value in all four corners.
+    public func sample(_ t: Double) -> (point: CGPoint, outward: DialVector) {
+        var travelled = Double(min(max(t, 0), 1)) * Double(length)
+        if corner.isBottom { travelled = Double(length) - travelled }
+        let arc = Double(cornerRadius) * .pi / 2
+
+        let u: CGFloat, v: CGFloat, nu: CGFloat, nv: CGFloat
+        if travelled <= Double(verticalRun) {
+            u = edgeGap
+            v = edgeGap + cornerRadius + (verticalRun - CGFloat(travelled))
+            nu = -1
+            nv = 0
+        } else if travelled <= Double(verticalRun) + arc {
+            let phi = (travelled - Double(verticalRun)) / Double(cornerRadius)
+            u = edgeGap + cornerRadius * (1 - CGFloat(cos(phi)))
+            v = edgeGap + cornerRadius * (1 - CGFloat(sin(phi)))
+            nu = -CGFloat(cos(phi))
+            nv = -CGFloat(sin(phi))
+        } else {
+            let run = min(CGFloat(travelled - Double(verticalRun) - arc), horizontalRun)
+            u = edgeGap + cornerRadius + run
+            v = edgeGap
+            nu = 0
+            nv = -1
         }
+
+        return (
+            CGPoint(x: apex.x + inwardX * u, y: apex.y + inwardY * v),
+            DialVector(dx: inwardX * nu, dy: inwardY * nv)
+        )
     }
 
-    /// Angles are radians from the +x axis in SwiftUI's y-down space.
-    /// The low end of the range always sits at the *lower* end of the arc and the high end at the
-    /// *upper* one — so in every corner, dragging your finger up the arc raises the value.
-    private var lowAngle: Double {
-        switch self {
-        case .topLeading, .topTrailing: .pi / 2    // straight down the side edge
-        case .bottomLeading: 0                     // along the bottom edge
-        case .bottomTrailing: .pi                  // along the bottom edge
+    /// A point `inset` points in from the tick tips (0 = the tip itself).
+    public func point(_ t: Double, inset: CGFloat) -> CGPoint {
+        let s = sample(t)
+        return CGPoint(x: s.point.x - s.outward.dx * inset, y: s.point.y - s.outward.dy * inset)
+    }
+
+    /// The direction of increasing value at `t` — what a drag gets projected onto while scrubbing.
+    public func tangent(_ t: Double) -> DialVector {
+        let outward = sample(t).outward
+        return corner.isTrailing ? outward.turnedRight : outward.turnedLeft
+    }
+
+    /// The position on the ruler nearest `point`. Scrubbing reads the ruler's direction *under the
+    /// finger* — not at the current value, which may be round the corner from where you're touching.
+    public func nearestPosition(to point: CGPoint) -> Double {
+        let steps = 72   // ~3.5pt apart; ample for reading a direction
+        var best = 0.0
+        var bestDistance = CGFloat.greatestFiniteMagnitude
+        for i in 0...steps {
+            let t = Double(i) / Double(steps)
+            let candidate = self.point(t, inset: 0)
+            let distance = hypot(candidate.x - point.x, candidate.y - point.y)
+            if distance < bestDistance {
+                bestDistance = distance
+                best = t
+            }
         }
-    }
-
-    private var highAngle: Double {
-        switch self {
-        case .topLeading: 0                        // along the top edge
-        case .topTrailing: .pi                     // along the top edge
-        case .bottomLeading: -.pi / 2              // straight up the side edge
-        case .bottomTrailing: 3 * .pi / 2          // straight up the side edge
-        }
-    }
-
-    /// +1 when the value climbs with increasing angle, −1 when it climbs against it.
-    var direction: Double { highAngle > lowAngle ? 1 : -1 }
-
-    /// A few degrees of breathing room so the end ticks don't sit flush against the screen edges.
-    private static let endInset: Double = 0.1
-
-    var startAngle: Double { lowAngle + Self.endInset * direction }
-    var endAngle: Double { highAngle - Self.endInset * direction }
-
-    /// Angle of the arc at normalized position `t` (0 = range floor, 1 = range ceiling).
-    func angle(at t: Double) -> Double {
-        startAngle + (endAngle - startAngle) * min(max(t, 0), 1)
-    }
-
-    /// A point on the arc at normalized position `t` and the given radius from the apex.
-    func point(at t: Double, radius: CGFloat, in size: CGSize) -> CGPoint {
-        let a = angle(at: t)
-        let o = apex(in: size)
-        return CGPoint(x: o.x + cos(a) * radius, y: o.y + sin(a) * radius)
+        return best
     }
 }
 
-/// The landscape counterpart to ``HapticDial``: a quarter-circle tick fan wrapped into a screen
-/// corner, so four adjustments can sit around the photo at once while the image keeps the middle of
-/// the screen to itself.
+/// The landscape counterpart to ``HapticDial``: a ruler bent around a screen corner, following the
+/// contour of the device, so four adjustments can sit around the photo at once while the image keeps
+/// the middle of the screen to itself.
 ///
-/// Feel matches the ruler dial — relative scrubbing (nothing jumps when you touch down), one haptic
-/// click per detent, a fuller thunk on a bipolar zero, a rigid tap at the ends, and pointer-style
-/// acceleration so a slow drag is precise and a quick sweep travels. Gearing lives in ``DialFeel``.
+/// Feel matches the ruler dial — relative scrubbing (nothing jumps when you touch down), a drag
+/// projected onto the ruler so it tracks your finger one-to-one, a haptic click per detent, a fuller
+/// thunk on a bipolar zero, a rigid tap at the ends, and pointer-style acceleration so a slow drag is
+/// precise and a quick sweep travels. Gearing lives in ``DialFeel``.
 public struct CornerDial: View {
     @Binding private var value: Double
     private let range: ClosedRange<Double>
     private let detent: Double
-    private let corner: DialCorner
+    private let contour: DialContour
     private let systemImage: String
     private let label: String
     private let readout: String
-    private let radius: CGFloat
     private let tint: DialTint?
     private let soundEnabled: Bool
     private let onBegin: () -> Void
@@ -98,15 +182,17 @@ public struct CornerDial: View {
 
     /// Unsnapped position, so sub-detent movement accumulates instead of being rounded away.
     @State private var rawValue: Double = 0
-    @State private var lastAngle: Double?
+    @State private var lastLocation: CGPoint?
     @State private var scrubbing = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// Ticks in the fan. Coarser than the detents (a 200-step range would be a solid smear) — the fan
-    /// reads as a gauge of the range, and the accent needle marks the live value between ticks.
-    private static let tickCount = 20
-    /// Padding beyond the arc so the needle, its glow and the icon aren't clipped.
-    private static let margin: CGFloat = 46
+    /// Ticks on the ruler. Coarser than the detents (a 200-step range would be a solid smear) — the
+    /// ruler reads as a gauge of the range, and the accent needle marks the live value between ticks.
+    /// 30 intervals puts them ~8pt apart, the same density as the ruler dial's pitch.
+    private static let tickCount = 30
+    private static let majorTick: CGFloat = 14
+    private static let mediumTick: CGFloat = 11
+    private static let minorTick: CGFloat = 8
 
     public init(
         value: Binding<Double>,
@@ -116,7 +202,7 @@ public struct CornerDial: View {
         systemImage: String,
         label: String,
         readout: String,
-        radius: CGFloat = 118,
+        contour: DialContour? = nil,
         tint: DialTint? = nil,
         soundEnabled: Bool = false,
         onBegin: @escaping () -> Void = {},
@@ -125,11 +211,10 @@ public struct CornerDial: View {
         self._value = value
         self.range = range
         self.detent = detent
-        self.corner = corner
+        self.contour = contour ?? DialContour(corner: corner)
         self.systemImage = systemImage
         self.label = label
         self.readout = readout
-        self.radius = radius
         self.tint = tint
         self.soundEnabled = soundEnabled
         self.onBegin = onBegin
@@ -137,13 +222,12 @@ public struct CornerDial: View {
         _rawValue = State(initialValue: value.wrappedValue)
     }
 
-    private var side: CGFloat { radius + Self.margin }
-    private var boxSize: CGSize { CGSize(width: side, height: side) }
+    private var corner: DialCorner { contour.corner }
     private var isBipolar: Bool { range.lowerBound < 0 }
     private var span: Double { range.upperBound - range.lowerBound }
     private var t: Double { span > 0 ? (value - range.lowerBound) / span : 0 }
-    /// Where the accent fill starts: the centre for a bipolar tool, the floor for a positive-only one.
-    private var fillOrigin: Double { isBipolar ? 0.5 : 0 }
+    /// Where the accent trace starts: the centre for a bipolar tool, the floor for a positive-only one.
+    private var traceOrigin: Double { isBipolar ? 0.5 : 0 }
     private var detentIndex: Int { Int((value / detent).rounded()) }
     private var lowIndex: Int { Int((range.lowerBound / detent).rounded()) }
     private var highIndex: Int { Int((range.upperBound / detent).rounded()) }
@@ -153,18 +237,16 @@ public struct CornerDial: View {
         ZStack(alignment: .topLeading) {
             cornerScrim
             ticks
-            fill
+            trace
             needle
             badge
-            // The scrub band sits on top but only claims the annulus around the arc, so it never
-            // steals a tap meant for the badge (double-tap to zero) or for the photo.
+            // The scrub band sits on top but only claims the strip along the ruler, so it never steals
+            // a tap meant for the readout (double-tap to zero) or for the photo.
             Color.clear
-                .contentShape(ArcBand(corner: corner,
-                                      inner: radius - 34,
-                                      outer: radius + 22))
+                .contentShape(ContourBand(contour: contour, outward: contour.edgeGap, inward: 40))
                 .gesture(scrub)
         }
-        .frame(width: side, height: side)
+        .frame(width: contour.size.width, height: contour.size.height)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(label) dial")
         .accessibilityValue(readout)
@@ -189,7 +271,7 @@ public struct CornerDial: View {
             colors: [.black.opacity(0.5), .black.opacity(0.18), .clear],
             center: corner.unitPoint,
             startRadius: 0,
-            endRadius: side
+            endRadius: max(contour.size.width, contour.size.height)
         )
         .allowsHitTesting(false)
     }
@@ -198,13 +280,12 @@ public struct CornerDial: View {
         // Resolved up front (colours included) so the renderer only walks plain values — nothing it
         // touches depends on the view or on actor-isolated state.
         let specs = tickSpecs
-        let radius = self.radius
-        let corner = self.corner
-        return Canvas { ctx, size in
+        let contour = self.contour
+        return Canvas { ctx, _ in
             for spec in specs {
                 var path = Path()
-                path.move(to: corner.point(at: spec.t, radius: radius - spec.length, in: size))
-                path.addLine(to: corner.point(at: spec.t, radius: radius, in: size))
+                path.move(to: contour.point(spec.t, inset: 0))
+                path.addLine(to: contour.point(spec.t, inset: spec.length))
                 ctx.stroke(path,
                            with: .color(spec.color),
                            style: StrokeStyle(lineWidth: spec.width, lineCap: .round))
@@ -213,47 +294,53 @@ public struct CornerDial: View {
         .allowsHitTesting(false)
     }
 
-    /// One entry per tick: three tiers of length like the ruler's ticks, a whisper of the tool's colour
-    /// axis where it has one, and the accent on a bipolar dial's centre.
+    /// One entry per tick. Same three tiers as the ruler dial — 10s tall, 5s a medium step, the rest
+    /// short — plus a whisper of the tool's colour axis where it has one, and the accent on a bipolar
+    /// dial's centre (which lands right on the corner, so neutral reads as the corner itself).
     private var tickSpecs: [TickSpec] {
         let accent = Theme.accent
         return (0...Self.tickCount).map { i in
-            let t = Double(i) / Double(Self.tickCount)
-            let isMajor = i % 5 == 0
+            let isTen = i % 10 == 0
+            let isFive = i % 5 == 0
             let isZero = isBipolar && i == Self.tickCount / 2
+            let t = Double(i) / Double(Self.tickCount)
             let base = isZero ? accent : (tint?.color(at: t) ?? .white)
             return TickSpec(
                 t: t,
-                length: isMajor ? 13 : 8,
-                width: isMajor ? 2 : 1.5,
-                color: base.opacity(isZero ? 0.9 : (isMajor ? 0.55 : 0.3))
+                length: isZero || isTen ? Self.majorTick : (isFive ? Self.mediumTick : Self.minorTick),
+                width: isTen ? 2 : (isFive ? 1.75 : 1.5),
+                color: base.opacity(isZero ? 0.9 : (isTen ? 0.55 : (isFive ? 0.45 : 0.3)))
             )
         }
     }
 
-    /// The accent trace from the fill origin out to the current value — "how far off neutral am I".
-    private var fill: some View {
-        ArcFill(t: t, origin: fillOrigin, corner: corner, radius: radius - 5)
+    /// The accent trace from neutral out to the current value — "how far off neutral am I".
+    private var trace: some View {
+        ContourTrace(t: t, origin: traceOrigin, contour: contour, inset: 3)
             .stroke(Theme.accent.opacity(0.55), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
             .animation(scrubbing || reduceMotion ? nil : Theme.Motion.snappy, value: t)
             .allowsHitTesting(false)
     }
 
     private var needle: some View {
-        Capsule()
+        let sample = contour.sample(t)
+        // Stands perpendicular to the ruler, like the ticks, and overhangs them at both ends.
+        let angle = atan2(sample.outward.dy, sample.outward.dx) - .pi / 2
+        return Capsule()
             .fill(Theme.accent)
             .frame(width: 3.5, height: 26)
             .shadow(color: Theme.accent.opacity(0.55), radius: 5)
-            .rotationEffect(.radians(corner.angle(at: t) - .pi / 2))
-            .position(corner.point(at: t, radius: radius - 5, in: boxSize))
+            .rotationEffect(.radians(Double(angle)))
+            .position(contour.point(t, inset: 9))
             .animation(scrubbing || reduceMotion ? nil : Theme.Motion.snappy, value: t)
             .allowsHitTesting(false)
     }
 
-    /// Tool glyph + live value, seated on the diagonal inside the fan. Double-tap to zero the tool,
-    /// the same shortcut the ruler dial gives on its centre mark.
+    /// Tool glyph + live value, sitting in the pocket the corner curves around. Double-tap to zero the
+    /// tool, the same shortcut the ruler dial gives on its centre mark.
     private var badge: some View {
-        VStack(spacing: 1) {
+        let clearance = contour.pocketRadius(tickLength: Self.majorTick)
+        return VStack(spacing: 1) {
             Image(systemName: systemImage)
                 .font(.system(size: 15, weight: .semibold))
             if isActive {
@@ -271,10 +358,11 @@ public struct CornerDial: View {
         .foregroundStyle(isActive ? Theme.accent : .white)
         .shadow(color: .black.opacity(0.7), radius: 4)
         .animation(reduceMotion ? nil : Theme.Motion.snappy, value: isActive)
-        .frame(width: 76, height: 60)
+        // Sized to the pocket, so the readout can never crowd the ticks curving around it.
+        .frame(width: clearance * 1.5, height: clearance * 1.05)
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { zeroOut() }
-        .position(corner.point(at: 0.5, radius: radius * 0.44, in: boxSize))
+        .position(contour.pocket)
     }
 
     // MARK: Scrubbing
@@ -282,28 +370,22 @@ public struct CornerDial: View {
     private var scrub: some Gesture {
         DragGesture(minimumDistance: 1, coordinateSpace: .local)
             .onChanged { v in
-                let apex = corner.apex(in: boxSize)
-                let dx = v.location.x - apex.x, dy = v.location.y - apex.y
-                let angle = atan2(dy, dx)
-                guard let previous = lastAngle else {
+                guard let previous = lastLocation else {
                     // First movement only seats the gesture — touching down never nudges the value.
-                    lastAngle = angle
+                    lastLocation = v.location
                     rawValue = value
                     scrubbing = true
                     onBegin()
                     return
                 }
-                lastAngle = angle
-                // Shortest way round, so crossing ±π can't fling the value.
-                var delta = angle - previous
-                while delta > .pi { delta -= 2 * .pi }
-                while delta < -.pi { delta += 2 * .pi }
-                // Arc length actually travelled, at the radius the finger is on (clamped so a touch
-                // drifting toward the apex doesn't turn into a huge angular swing).
-                let touchRadius = min(max(hypot(dx, dy), radius * 0.55), radius * 1.5)
-                let travel = delta * corner.direction * Double(touchRadius)
+                lastLocation = v.location
+                // How far the finger moved *along* the ruler: its travel projected onto the ruler's
+                // direction where the finger is. Straight runs and the corner curve behave identically,
+                // and the dial tracks the finger rather than the angle it happens to subtend.
+                let tangent = contour.tangent(contour.nearestPosition(to: previous))
+                let travel = (v.location.x - previous.x) * tangent.dx + (v.location.y - previous.y) * tangent.dy
                 let speed = Double(hypot(v.velocity.width, v.velocity.height))
-                let step = travel / Double(DialFeel.arcPointsPerDetent) * detent * DialFeel.gain(forSpeed: speed)
+                let step = Double(travel) / Double(DialFeel.arcPointsPerDetent) * detent * DialFeel.gain(forSpeed: speed)
                 rawValue = clamp(rawValue + step)
                 let snapped = clamp((rawValue / detent).rounded() * detent)
                 if abs(snapped - value) > 1e-9 {
@@ -312,7 +394,7 @@ public struct CornerDial: View {
                 }
             }
             .onEnded { _ in
-                lastAngle = nil
+                lastLocation = nil
                 scrubbing = false
                 onCommit()
             }
@@ -351,15 +433,27 @@ private nonisolated struct TickSpec: Sendable {
     let color: Color
 }
 
-// MARK: Shapes
+/// Walks the contour as a polyline. Sampling (rather than piecing arcs and lines together) keeps the
+/// drawn shapes in lockstep with `DialContour.sample`, which is also what the gesture reads.
+private nonisolated func contourPath(
+    _ contour: DialContour, from low: Double, to high: Double, inset: CGFloat, steps: Int
+) -> Path {
+    var path = Path()
+    guard high > low, steps > 0 else { return path }
+    for i in 0...steps {
+        let p = contour.point(low + (high - low) * Double(i) / Double(steps), inset: inset)
+        if i == 0 { path.move(to: p) } else { path.addLine(to: p) }
+    }
+    return path
+}
 
-/// The accent trace along the arc, from `origin` to `t`. Animatable so the trace grows and shrinks
-/// with the value instead of snapping.
-private nonisolated struct ArcFill: Shape {
+/// The accent trace along the ruler, from `origin` to `t`. Animatable so it grows and shrinks with the
+/// value instead of snapping.
+private nonisolated struct ContourTrace: Shape {
     var t: Double
     let origin: Double
-    let corner: DialCorner
-    let radius: CGFloat
+    let contour: DialContour
+    let inset: CGFloat
 
     var animatableData: Double {
         get { t }
@@ -367,39 +461,24 @@ private nonisolated struct ArcFill: Shape {
     }
 
     func path(in rect: CGRect) -> Path {
-        // Walked as a polyline rather than `addArc`, whose clockwise flag is ambiguous in SwiftUI's
-        // flipped space — this can only ever draw the short way round.
         let low = min(origin, t), high = max(origin, t)
-        var path = Path()
-        guard high - low > 0.001 else { return path }
-        let steps = 24
-        for i in 0...steps {
-            let p = corner.point(at: low + (high - low) * Double(i) / Double(steps),
-                                 radius: radius, in: rect.size)
-            if i == 0 { path.move(to: p) } else { path.addLine(to: p) }
-        }
-        return path
+        guard high - low > 0.001 else { return Path() }
+        return contourPath(contour, from: low, to: high, inset: inset, steps: 28)
     }
 }
 
-/// The annulus around the tick fan — used as the dial's hit area so the rest of the corner (and the
-/// photo behind it) stays touchable.
-private nonisolated struct ArcBand: Shape {
-    let corner: DialCorner
-    let inner: CGFloat
-    let outer: CGFloat
+/// The strip along the ruler — the dial's hit area, so the rest of the corner (and the photo behind
+/// it) stays touchable. Runs from just outside the tick tips to `inward` points past them.
+private nonisolated struct ContourBand: Shape {
+    let contour: DialContour
+    let outward: CGFloat
+    let inward: CGFloat
 
     func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let steps = 32
-        for i in 0...steps {
-            let t = Double(i) / Double(steps)
-            let p = corner.point(at: t, radius: outer, in: rect.size)
-            if i == 0 { path.move(to: p) } else { path.addLine(to: p) }
-        }
+        let steps = 36
+        var path = contourPath(contour, from: 0, to: 1, inset: -outward, steps: steps)
         for i in stride(from: steps, through: 0, by: -1) {
-            let t = Double(i) / Double(steps)
-            path.addLine(to: corner.point(at: t, radius: inner, in: rect.size))
+            path.addLine(to: contour.point(Double(i) / Double(steps), inset: inward))
         }
         path.closeSubpath()
         return path
