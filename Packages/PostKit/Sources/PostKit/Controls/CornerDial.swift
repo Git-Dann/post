@@ -70,6 +70,31 @@ public nonisolated struct DialContour: Sendable {
         self.verticalRun = verticalRun
     }
 
+    /// Metrics for a given screen. The runs are a fraction of each axis, so a ruler covers the same
+    /// share of its edge on every iPhone rather than a fixed number of points that reads long on a
+    /// small screen and lost on a large one. `edgeGap` stays absolute — it's a physical margin from the
+    /// bezel, not a proportion.
+    ///
+    /// The vertical run is capped by what has to fit *between* the two dials sharing a side (the action
+    /// cluster and the category swipe), so the layout can't collide on a short screen.
+    public init(
+        corner: DialCorner,
+        screen: CGSize,
+        displayCornerRadius: CGFloat,
+        edgeGap: CGFloat = 12
+    ) {
+        let horizontal = min(max(screen.width * 0.145, 96), 190)
+        let verticalCeiling = max((screen.height - 240) / 2, 36)
+        let vertical = min(max(screen.height * 0.12, 36), verticalCeiling)
+        self.init(
+            corner: corner,
+            edgeGap: edgeGap,
+            displayCornerRadius: displayCornerRadius,
+            horizontalRun: horizontal,
+            verticalRun: vertical
+        )
+    }
+
     /// Radius of the tick-tip contour — the display's corner, brought in by the edge gap.
     public var cornerRadius: CGFloat { max(displayCornerRadius - edgeGap, 10) }
 

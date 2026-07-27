@@ -223,7 +223,7 @@ public struct EditorView: View {
 
                 // The styles panel takes the bottom centre and the corners stand down while it's up.
                 if !showStyles {
-                    cornerDials(displayRadius: radius)
+                    cornerDials(screen: geo.size, displayRadius: radius)
                     bankIndicator(insets: insets)
                 }
 
@@ -288,7 +288,7 @@ public struct EditorView: View {
     /// The active bank's tools, one per corner in reading order. Only the value needle moves when the
     /// bank changes — the rulers stay put, so a swipe reads as re-labelling the corners rather than a
     /// wholesale swap.
-    private func cornerDials(displayRadius: CGFloat) -> some View {
+    private func cornerDials(screen: CGSize, displayRadius: CGFloat) -> some View {
         ZStack {
             ForEach(Array(bank.tools.enumerated()), id: \.element) { index, tool in
                 let corner = DialBank.corners[index]
@@ -300,7 +300,8 @@ public struct EditorView: View {
                     systemImage: tool.systemImage,
                     label: tool.title,
                     readout: tool.readout(in: model.state),
-                    contour: DialContour(corner: corner, displayCornerRadius: displayRadius),
+                    contour: DialContour(corner: corner, screen: screen,
+                                        displayCornerRadius: displayRadius),
                     tint: tool.dialTint,
                     soundEnabled: soundEnabled,
                     onBegin: { beginCornerScrub(tool) },
@@ -342,7 +343,8 @@ public struct EditorView: View {
     /// two right-hand dials, and never while the photo is zoomed (that gesture is panning) or the
     /// styles panel is up.
     private func categorySwipe(in size: CGSize, insets: EdgeInsets, displayRadius: CGFloat) -> some Gesture {
-        let keepOut = DialContour(corner: .topLeading, displayCornerRadius: displayRadius).size.height + 16
+        let keepOut = DialContour(corner: .topLeading, screen: size,
+                                  displayCornerRadius: displayRadius).size.height + 16
         return DragGesture(minimumDistance: 24, coordinateSpace: .local)
             .onEnded { value in
                 guard zoomScale <= 1, !showStyles, !model.isCropping else { return }
