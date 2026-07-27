@@ -71,9 +71,12 @@ public struct EditorView: View {
     /// the corners, categories swiped. Cropping keeps its own side-rail arrangement.
     private var isCornerLayout: Bool { isLandscape && !model.isCropping }
 
-    /// Shared corner-dial metrics (every corner uses the same runs and radius). The box height is also
-    /// what the category swipe keeps clear of at the top and bottom of the trailing edge.
-    private static let dialContour = DialContour(corner: .topLeading)
+    /// The screen's corner radius, so the corner rulers can be concentric with it. There's no public
+    /// API for it; the landscape side insets are the tell — a device with a sensor housing has deeply
+    /// rounded glass, a flat-edged one barely any.
+    private func displayCornerRadius(insets: EdgeInsets) -> CGFloat {
+        insets.leading > 20 ? 55 : 14
+    }
 
     /// - Parameters:
     ///   - exporter: produces a shareable file URL for the given recipe (full-res export),
@@ -202,34 +205,38 @@ public struct EditorView: View {
     }
 
     /// Landscape editing: the photo owns the whole screen (a landscape shot fills it edge to edge),
-    /// and the controls wrap around it — four adjustment dials in the corners, the action cluster on
-    /// the left, categories swiped on the centre-right, Done and the modes along the bottom centre.
-    /// Everything dims to a whisper a few seconds after your last touch (see `wakeChrome`).
+    /// and the controls wrap around it — four rulers following the outline of the screen, the action
+    /// cluster on the left, categories swiped on the centre-right, Done and the modes along the bottom
+    /// centre. Everything dims to a whisper a few seconds after your last touch (see `wakeChrome`).
+    ///
+    /// The layout is laid out in *display* coordinates, not safe-area ones: the rulers have to hug the
+    /// glass to read as part of it. Every actual control is then inset by the safe area itself, so
+    /// nothing tappable hides behind the sensor housing or the home indicator.
     private var cornerLayout: some View {
         GeometryReader { geo in
+            let insets = geo.safeAreaInsets
+            let radius = displayCornerRadius(insets: insets)
             ZStack {
-                // Bleeds under the safe area so the image is as big as the glass allows; the controls
-                // below stay inside the insets, which is what keeps the corner apexes reachable.
                 framedImage
                     .aspectRatio(model.aspect, contentMode: .fit)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .ignoresSafeArea()
 
                 // The styles panel takes the bottom centre and the corners stand down while it's up.
                 if !showStyles {
-                    cornerDials
-                    bankIndicator
+                    cornerDials(displayRadius: radius)
+                    bankIndicator(insets: insets)
                 }
 
-                actionCluster
-                topChips
-                bottomCentre
+                actionCluster(insets: insets)
+                topChips(insets: insets)
+                bottomCentre(insets: insets)
             }
             // Attached to the container (not an overlay) so it never steals a touch from the dials,
             // the buttons or the photo's own pinch-to-inspect — they all run alongside it.
-            .simultaneousGesture(categorySwipe(in: geo.size))
+            .simultaneousGesture(categorySwipe(in: geo.size, insets: insets, displayRadius: radius))
             .simultaneousGesture(TapGesture().onEnded { wakeChrome() })
         }
+        .ignoresSafeArea()
         .onAppear {
             // Land on whatever was being edited in portrait, then flash the bank name once so the
             // swipe has an affordance the first time you turn the phone.
@@ -281,7 +288,7 @@ public struct EditorView: View {
     /// The active bank's tools, one per corner in reading order. Only the value needle moves when the
     /// bank changes — the rulers stay put, so a swipe reads as re-labelling the corners rather than a
     /// wholesale swap.
-    private var cornerDials: some View {
+    private func cornerDials(displayRadius: CGFloat) -> some View {
         ZStack {
             ForEach(Array(bank.tools.enumerated()), id: \.element) { index, tool in
                 let corner = DialBank.corners[index]
@@ -293,7 +300,7 @@ public struct EditorView: View {
                     systemImage: tool.systemImage,
                     label: tool.title,
                     readout: tool.readout(in: model.state),
-                    contour: DialContour(corner: corner),
+                    contour: DialContour(corner: corner, displayCornerRadius: displayRadius),
                     tint: tool.dialTint,
                     soundEnabled: soundEnabled,
                     onBegin: { beginCornerScrub(tool) },
@@ -334,23 +341,26 @@ public struct EditorView: View {
     /// deliberate, mostly-vertical drag that starts in the clear stretch of trailing edge between the
     /// two right-hand dials, and never while the photo is zoomed (that gesture is panning) or the
     /// styles panel is up.
-    private func categorySwipe(in size: CGSize) -> some Gesture {
-        DragGesture(minimumDistance: 24, coordinateSpace: .local)
+    private func categorySwipe(in size: CGSize, insets: EdgeInsets, displayRadius: CGFloat) -> some Gesture {
+        let keepOut = DialContour(corner: .topLeading, displayCornerRadius: displayRadius).size.height + 16
+        return DragGesture(minimumDistance: 24, coordinateSpace: .local)
             .onEnded { value in
                 guard zoomScale <= 1, !showStyles, !model.isCropping else { return }
-                guard inCategorySwipeZone(value.startLocation, size: size) else { return }
+                guard inCategorySwipeZone(value.startLocation, size: size,
+                                          insets: insets, keepOut: keepOut) else { return }
                 let dy = value.translation.height, dx = value.translation.width
                 guard abs(dy) > 44, abs(dy) > abs(dx) * 1.4 else { return }
                 stepBank(by: dy < 0 ? 1 : -1)   // swipe up → the next category, like scrolling a list
             }
     }
 
-    /// The live zone: right of centre and clear of the two right-hand dials. Now that a dial hugs the
-    /// edges it occupies a known box in its corner, so the keep-out is simply the band between them —
-    /// a scrub can never double as a category change.
-    private func inCategorySwipeZone(_ point: CGPoint, size: CGSize) -> Bool {
-        guard point.x > size.width * 0.55 else { return false }
-        let keepOut = Self.dialContour.size.height + 16
+    /// The live zone: right of centre and clear of the two trailing-edge dials. Each dial owns a known
+    /// box in its corner, so the keep-out is simply the band between them — a scrub can never double as
+    /// a category change. It also stops at the safe edge, since a thumb landing on the sensor housing
+    /// registers nothing at all.
+    private func inCategorySwipeZone(_ point: CGPoint, size: CGSize,
+                                     insets: EdgeInsets, keepOut: CGFloat) -> Bool {
+        guard point.x > size.width * 0.55, point.x < size.width - insets.trailing else { return false }
         return point.y > keepOut && point.y < size.height - keepOut
     }
 
@@ -378,7 +388,7 @@ public struct EditorView: View {
 
     /// Where you are in the swipe cycle — one mark per bank up the right edge, the active one drawn
     /// as an accent bar. Doubles as the hint that the right side is swipeable.
-    private var bankIndicator: some View {
+    private func bankIndicator(insets: EdgeInsets) -> some View {
         HStack(spacing: Theme.Space.s) {
             if bankPillVisible {
                 GlassPill(bank.displayTitle)
@@ -394,7 +404,7 @@ public struct EditorView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-        .padding(.trailing, Theme.Space.xs)
+        .padding(.trailing, insets.trailing + Theme.Space.xs)
         .opacity(chromeAwake ? 1 : 0.25)
         .animation(reduceMotion ? nil : Theme.Motion.snappy, value: bankIndex)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.45), value: chromeAwake)
@@ -980,7 +990,7 @@ public struct EditorView: View {
     /// Landscape (corner layout): the same buttons as a compact two-row cluster on the left, sized to
     /// drop into the gap between the two left-hand tick fans. It fades right out while you scrub a
     /// dial or once the chrome goes idle — a tap anywhere brings it back.
-    private var actionCluster: some View {
+    private func actionCluster(insets: EdgeInsets) -> some View {
         let visible = chromeAwake && scrubbingTool == nil
         // 44pt buttons: two rows of them clear the side runs of the dials above and below.
         return GlassEffectContainer {
@@ -997,14 +1007,14 @@ public struct EditorView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .padding(.leading, Theme.Space.s)
+        .padding(.leading, insets.leading + Theme.Space.s)
         .opacity(visible ? 1 : 0)
         .allowsHitTesting(visible)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: visible)
     }
 
     /// Landscape: compare and the scope chip sit together at the top centre, between the upper dials.
-    private var topChips: some View {
+    private func topChips(insets: EdgeInsets) -> some View {
         GlassEffectContainer {
             HStack(spacing: Theme.Space.s) {
                 if !model.isCropping { compareControl }
@@ -1012,14 +1022,14 @@ public struct EditorView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .padding(.top, Theme.Space.s)
+        .padding(.top, insets.top + Theme.Space.s)
         .opacity(chromeAwake ? 1 : 0.25)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.45), value: chromeAwake)
     }
 
     /// Landscape: the modes that aren't dials (Auto · Crop · Styles) with Done, along the bottom
     /// centre. The styles panel, when open, sits directly above this row in place of the corner dials.
-    private var bottomCentre: some View {
+    private func bottomCentre(insets: EdgeInsets) -> some View {
         VStack(spacing: Theme.Space.s) {
             if showStyles {
                 dialSlot(scrim: false)
@@ -1044,7 +1054,7 @@ public struct EditorView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .padding(.bottom, Theme.Space.xs)
+        .padding(.bottom, insets.bottom + Theme.Space.xs)
         .opacity(chromeAwake ? 1 : 0.25)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.45), value: chromeAwake)
     }

@@ -44,10 +44,12 @@ public nonisolated struct DialVector: Sendable, Equatable {
 /// comes from ``sample(_:)``, so the shape is described exactly once.
 public nonisolated struct DialContour: Sendable {
     public let corner: DialCorner
-    /// How far the outer tick tips sit inside the safe area's edges.
+    /// How far the outer tick tips sit inside the display's edges. The same on all four sides — an even
+    /// gap all the way round is what makes the ruler read as engraved into the screen's own outline.
     public var edgeGap: CGFloat
-    /// The contour's own corner radius, measured at the tick tips.
-    public var cornerRadius: CGFloat
+    /// The screen's corner radius. The ruler's corner is concentric with it, so the ticks turn exactly
+    /// as the glass does rather than cutting a tighter bend across it.
+    public var displayCornerRadius: CGFloat
     /// Straight run along the top/bottom edge — the long one, since width is the plentiful axis.
     public var horizontalRun: CGFloat
     /// Straight run along the leading/trailing edge. Kept short so the two dials sharing a side leave
@@ -56,17 +58,25 @@ public nonisolated struct DialContour: Sendable {
 
     public init(
         corner: DialCorner,
-        edgeGap: CGFloat = 8,
-        cornerRadius: CGFloat = 56,
+        edgeGap: CGFloat = 12,
+        displayCornerRadius: CGFloat = 55,
         horizontalRun: CGFloat = 116,
         verticalRun: CGFloat = 48
     ) {
         self.corner = corner
         self.edgeGap = edgeGap
-        self.cornerRadius = cornerRadius
+        self.displayCornerRadius = displayCornerRadius
         self.horizontalRun = horizontalRun
         self.verticalRun = verticalRun
     }
+
+    /// Radius of the tick-tip contour — the display's corner, brought in by the edge gap.
+    public var cornerRadius: CGFloat { max(displayCornerRadius - edgeGap, 10) }
+
+    /// Where the touch strip along the ruler starts and ends, as insets in from the tick tips. Bottom
+    /// corners begin theirs further in, so a scrub can't be mistaken for the home-indicator swipe.
+    public var hitStart: CGFloat { corner.isBottom ? 10 : 0 }
+    public var hitEnd: CGFloat { hitStart + 42 }
 
     /// The box the dial occupies in its corner.
     public var size: CGSize {
@@ -243,7 +253,7 @@ public struct CornerDial: View {
             // The scrub band sits on top but only claims the strip along the ruler, so it never steals
             // a tap meant for the readout (double-tap to zero) or for the photo.
             Color.clear
-                .contentShape(ContourBand(contour: contour, outward: contour.edgeGap, inward: 40))
+                .contentShape(ContourBand(contour: contour, from: contour.hitStart, to: contour.hitEnd))
                 .gesture(scrub)
         }
         .frame(width: contour.size.width, height: contour.size.height)
@@ -348,11 +358,15 @@ public struct CornerDial: View {
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .contentTransition(.numericText())
+                    .fixedSize()
             }
             if scrubbing {
+                // Overhangs the pocket rather than wrapping inside it — it's only up while your finger
+                // is down, and the ticks it reaches over are 14pt of hairline.
                 Text(label)
                     .font(.system(size: 10, weight: .medium, design: .rounded))
                     .foregroundStyle(.white.opacity(0.75))
+                    .fixedSize()
             }
         }
         .foregroundStyle(isActive ? Theme.accent : .white)
@@ -468,17 +482,17 @@ private nonisolated struct ContourTrace: Shape {
 }
 
 /// The strip along the ruler — the dial's hit area, so the rest of the corner (and the photo behind
-/// it) stays touchable. Runs from just outside the tick tips to `inward` points past them.
+/// it) stays touchable. `from` and `to` are insets in from the tick tips.
 private nonisolated struct ContourBand: Shape {
     let contour: DialContour
-    let outward: CGFloat
-    let inward: CGFloat
+    let from: CGFloat
+    let to: CGFloat
 
     func path(in rect: CGRect) -> Path {
         let steps = 36
-        var path = contourPath(contour, from: 0, to: 1, inset: -outward, steps: steps)
+        var path = contourPath(contour, from: 0, to: 1, inset: from, steps: steps)
         for i in stride(from: steps, through: 0, by: -1) {
-            path.addLine(to: contour.point(Double(i) / Double(steps), inset: inward))
+            path.addLine(to: contour.point(Double(i) / Double(steps), inset: to))
         }
         path.closeSubpath()
         return path
