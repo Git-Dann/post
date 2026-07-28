@@ -14,9 +14,12 @@ settings:
     SWIFT_APPROACHABLE_CONCURRENCY: YES
     TARGETED_DEVICE_FAMILY: "1"
     MARKETING_VERSION: "0.1.0"
-    # Bump this for every upload — App Store Connect rejects a build number it has already seen,
-    # and 0.1.0 (1) is already on TestFlight.
-    CURRENT_PROJECT_VERSION: "2"
+    # Must exceed the highest build already uploaded for this marketing version — App Store Connect
+    # rejects a number it has seen, or one lower than the newest. 0.1.0 (14) is on TestFlight, so this
+    # is a floor of 15. If you set the number outside this file (Xcode build settings, agvtool, a CI
+    # step), that wins after `xcodegen generate` only until the project is regenerated — keep the two
+    # in step or the regenerated project will hand you a stale, rejectable number.
+    CURRENT_PROJECT_VERSION: "15"
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     GENERATE_INFOPLIST_FILE: YES
     # Signing is pinned here so it survives `xcodegen generate` (no more re-adding the team each
