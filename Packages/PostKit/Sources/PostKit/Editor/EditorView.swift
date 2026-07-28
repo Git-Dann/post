@@ -49,6 +49,8 @@ public struct EditorView: View {
     @State private var idleTask: Task<Void, Never>?
     // The corner dial currently under a finger (hides the action cluster while you work).
     @State private var scrubbingTool: EditTool?
+    // Measured size of the whole editor, which decides portrait vs landscape (see `isLandscape`).
+    @State private var viewportSize: CGSize = .zero
     // Selective-scope reveal: a brief dim of the un-edited region when a region is chosen.
     @State private var scopeRevealActive = false
     @State private var scopeMaskImage: CGImage?
@@ -63,9 +65,17 @@ public struct EditorView: View {
     @Environment(\.displayScale) private var displayScale
     @Environment(\.verticalSizeClass) private var vSize
 
-    /// Corner-dial layout when the viewport is short & wide (iPhone landscape). iPad and portrait stay
-    /// on the stacked layout (.regular height); extensions (no chrome) stay stacked too.
-    private var isLandscape: Bool { showsChrome && vSize == .compact }
+    /// Corner-dial layout whenever the viewport is genuinely wider than it is tall. Decided from the
+    /// measured size rather than the vertical size class: the size class is a coarse proxy that depends
+    /// on device, presentation and multitasking, and when it disagreed with the actual shape the editor
+    /// silently kept the stacked layout in landscape. Extensions (no chrome) stay stacked.
+    ///
+    /// Falls back to the size class for the first frame, before `viewportSize` has been measured.
+    private var isLandscape: Bool {
+        guard showsChrome else { return false }
+        guard viewportSize.width > 0, viewportSize.height > 0 else { return vSize == .compact }
+        return viewportSize.width > viewportSize.height * 1.2   // margin so near-square never flip-flops
+    }
 
     /// The landscape editing layout: photo centred on the whole screen, four adjustments wrapped into
     /// the corners, categories swiped. Cropping keeps its own side-rail arrangement.
@@ -107,6 +117,16 @@ public struct EditorView: View {
             Group {
                 if isLandscape { landscapeLayout } else { portraitLayout }
             }
+        }
+        // Measures the editor itself — `isLandscape` reads the shape of the screen from this rather
+        // than trusting the size class.
+        .background {
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { viewportSize = geo.size }
+                    .onChange(of: geo.size) { _, size in viewportSize = size }
+            }
+            .ignoresSafeArea()
         }
         .statusBarHidden()
         // NB: deliberately no `.animation(value: isLandscape)` here. Animating the portrait⇄landscape
