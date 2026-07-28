@@ -14,7 +14,9 @@ settings:
     SWIFT_APPROACHABLE_CONCURRENCY: YES
     TARGETED_DEVICE_FAMILY: "1"
     MARKETING_VERSION: "0.1.0"
-    CURRENT_PROJECT_VERSION: "1"
+    # Bump this for every upload — App Store Connect rejects a build number it has already seen,
+    # and 0.1.0 (1) is already on TestFlight.
+    CURRENT_PROJECT_VERSION: "2"
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     GENERATE_INFOPLIST_FILE: YES
     # Signing is pinned here so it survives `xcodegen generate` (no more re-adding the team each
